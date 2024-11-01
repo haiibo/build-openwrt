@@ -12,6 +12,8 @@ sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.
 # 移除要替换的包+
 rm -rf feeds/packages/utils/v2dat
 rm -rf feeds/packages/lang/golang
+rm -rf feeds/packages/net/alist
+rm -rf feeds/packages/net/ddns-go
 rm -rf feeds/packages/net/mosdns
 rm -rf feeds/packages/net/msd_lite
 rm -rf feeds/packages/net/smartdns
@@ -73,6 +75,9 @@ git clone --depth=1 -b lua https://github.com/sbwml/luci-app-alist package/luci-
 
 # Golang
 git clone --depth=1 https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+
+# DDNS-GO
+git clone --depth=1 https://github.com/sirpdboy/luci-app-ddns-go package/luci-app-ddns-go
 
 # iStore
 git_sparse_clone main https://github.com/linkease/istore-ui app-store-ui
