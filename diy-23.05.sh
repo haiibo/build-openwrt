@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# 打包Toolchain
+if [[ $REBUILD_TOOLCHAIN = 'true' ]]; then
+    echo -e "\e[1;33m开始打包toolchain目录\e[0m"
+    cd $OPENWRT_PATH
+    sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
+    [ -d ".ccache" ] && (ccache=".ccache"; ls -alh .ccache)
+    du -h --max-depth=1 ./staging_dir
+    du -h --max-depth=1 ./ --exclude=staging_dir
+    tar -I zstdmt -cf $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst staging_dir/host* staging_dir/tool* $ccache
+    ls -lh $GITHUB_WORKSPACE/output
+    [ -e $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst ] || exit 1
+    exit 0
+fi
+
+[ -d $GITHUB_WORKSPACE/output ] || mkdir $GITHUB_WORKSPACE/output
+
 color() {
     case $1 in
         cy) echo -e "\033[1;33m$2\033[0m" ;;
@@ -131,6 +147,87 @@ clone_all() {
     rm -rf $temp_dir
 }
 
+# 设置编译源码与分支
+REPO_URL="https://github.com/immortalwrt/immortalwrt"
+echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
+REPO_BRANCH="openwrt-23.05"
+echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
+
+# 开始拉取编译源码
+BEGIN_TIME=$(date '+%H:%M:%S')
+[[ $REPO_BRANCH != "master" ]] && BRANCH="-b $REPO_BRANCH --single-branch"
+cd /workdir
+git clone -q $BRANCH $REPO_URL openwrt
+status "拉取编译源码"
+ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+[ -d openwrt ] && cd openwrt || exit
+echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
+
+# 开始生成全局变量
+BEGIN_TIME=$(date '+%H:%M:%S')
+[ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
+make defconfig 1>/dev/null 2>&1
+
+# 源仓库与分支
+SOURCE_REPO=$(basename $REPO_URL)
+echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
+echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
+
+# 平台架构
+TARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_BOARD/{print $2}' .config)
+SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
+DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
+echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+
+# 内核版本
+KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
+KERNEL_VERSION=$(awk -F '-' '/KERNEL/{print $2}' include/kernel-$KERNEL | awk '{print $1}')
+echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
+
+# Toolchain缓存文件名
+TOOLS_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
+CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
+echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
+
+# 源码更新信息
+COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")
+echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >>$GITHUB_ENV
+COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")
+echo "COMMIT_DATE=$COMMIT_DATE" >>$GITHUB_ENV
+COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")
+echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >>$GITHUB_ENV
+COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
+echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
+status "生成全局变量"
+
+# 下载并部署Toolchain
+if [[ $TOOLCHAIN = 'true' ]]; then
+    cache_xa=$(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
+    cache_xc=$(curl -sL api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
+    if [[ $cache_xa || $cache_xc ]]; then
+        BEGIN_TIME=$(date '+%H:%M:%S')
+        [ $cache_xa ] && wget -qc -t=3 $cache_xa || wget -qc -t=3 $cache_xc
+        [ -e *.tzst ]; status "下载toolchain缓存文件"
+        [ -e *.tzst ] && {
+            BEGIN_TIME=$(date '+%H:%M:%S')
+            tar -I unzstd -xf *.tzst || tar -xf *.tzst
+            [ $cache_xa ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
+            sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
+            [ -d staging_dir ]; status "部署toolchain编译缓存"
+        }
+    else
+        echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
+    fi
+else
+    echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
+fi
+
+# 开始更新&安装插件
+BEGIN_TIME=$(date '+%H:%M:%S')
+./scripts/feeds update -a 1>/dev/null 2>&1
+./scripts/feeds install -a 1>/dev/null 2>&1
+status "更新&安装插件"
+
 # 创建插件保存目录
 destination_dir="package/A"
 [ -d $destination_dir ] || mkdir -p $destination_dir
@@ -172,6 +269,14 @@ sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/confi
 
 # 开始加载个人设置
 BEGIN_TIME=$(date '+%H:%M:%S')
+
+[ -e $GITHUB_WORKSPACE/files ] && mv $GITHUB_WORKSPACE/files files
+
+# 设置固件rootfs大小
+if [ $PART_SIZE ]; then
+    sed -i '/ROOTFS_PARTSIZE/d' $GITHUB_WORKSPACE/$CONFIG_FILE
+    echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>$GITHUB_WORKSPACE/$CONFIG_FILE
+fi
 
 # 修改默认IP
 [ $DEFAULT_IP ] && sed -i '/n) ipad/s/".*"/"'"$DEFAULT_IP"'"/' package/base-files/files/bin/config_generate
@@ -243,9 +348,14 @@ status "加载个人设置"
 
 # 开始更新配置文件
 BEGIN_TIME=$(date '+%H:%M:%S')
+[ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
 make defconfig 1>/dev/null 2>&1
 status "更新配置文件"
 
 echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
+
+# 更改固件文件名
+# sed -i "s/\$(VERSION_DIST_SANITIZED)/$SOURCE_REPO-${REPO_BRANCH#*-}-$KERNEL_VERSION/" include/image.mk
+# sed -i "/IMG_PREFIX:/ {s/=/=$SOURCE_REPO-${REPO_BRANCH#*-}-$KERNEL_VERSION-\$(shell date +%y.%m.%d)-/}" include/image.mk
 
 echo -e "\e[1;35m脚本运行完成！\e[0m"
