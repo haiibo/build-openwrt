@@ -14,7 +14,7 @@ status() {
     END_TIME=$(date '+%H:%M:%S')
     _date=" ==> 用时 $[$(date +%s -d "$END_TIME") - $(date +%s -d "$BEGIN_TIME")] 秒"
     [[ $_date =~ [0-9]+ ]] || _date=""
-    if [ $CHECK = 0 ]; then
+    if [[ $CHECK = 0 ]]; then
         printf "%-62s %s %s %s %s %s %s %s\n" \
         $(echo -e "$(color cy $1) [ $(color cg ✔) ]${_date}")
     else
@@ -133,11 +133,24 @@ clone_all() {
 
 # 创建插件保存目录
 destination_dir="package/A"
-[[ -d "$destination_dir" ]] || mkdir -p $destination_dir
+[ -d $destination_dir ] || mkdir -p $destination_dir
 
 color cy "添加&替换插件"
+
 # 添加额外插件
 clone_dir openwrt-23.05 https://github.com/coolsnowwolf/luci luci-app-adguardhome
+git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
+clone_all https://github.com/morytyann/OpenWrt-mihomo
+
+clone_all https://github.com/sbwml/luci-app-alist
+clone_all https://github.com/sbwml/luci-app-mosdns
+git_clone https://github.com/sbwml/packages_lang_golang golang
+
+clone_all https://github.com/linkease/istore-ui
+clone_all https://github.com/linkease/istore luci
+
+clone_all https://github.com/brvphoenix/luci-app-wrtbwmon
+clone_all https://github.com/brvphoenix/wrtbwmon
 
 # 科学上网插件
 clone_all https://github.com/fw876/helloworld
@@ -157,29 +170,6 @@ sed -i "s|firmware_repo.*|firmware_repo 'https://github.com/$GITHUB_REPOSITORY'|
 # sed -i "s|kernel_path.*|kernel_path 'https://github.com/ophub/kernel'|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 
-# HomeProxy
-git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
-
-# Mihomo
-clone_all https://github.com/morytyann/OpenWrt-mihomo
-
-# MosDNS
-clone_all https://github.com/sbwml/luci-app-mosdns
-
-# Alist
-clone_all https://github.com/sbwml/luci-app-alist
-
-# Golang
-git_clone https://github.com/sbwml/packages_lang_golang golang
-
-# iStore
-clone_all https://github.com/linkease/istore-ui
-clone_all https://github.com/linkease/istore luci
-
-# Wrtbwmon
-clone_all https://github.com/brvphoenix/luci-app-wrtbwmon
-clone_all https://github.com/brvphoenix/wrtbwmon
-
 # 开始加载个人设置
 BEGIN_TIME=$(date '+%H:%M:%S')
 
@@ -198,20 +188,6 @@ sed -i 's/root:::0:99999:7:::/root:$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.::0:99999:7
 # 更改 Argon 主题背景
 cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/bg1.jpg
 
-# 修复 Makefile 路径
-find $destination_dir/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i \
-    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?' \
-    -e 's?include \.\./\.\./\(lang\|devel\)?include $(TOPDIR)/feeds/packages/\1?' {}
-
-# 转换插件语言翻译
-for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
-    if [[ -d $e/zh-cn && ! -d $e/zh_Hans ]]; then
-        ln -s zh-cn $e/zh_Hans 2>/dev/null
-    elif [[ -d $e/zh_Hans && ! -d $e/zh-cn ]]; then
-        ln -s zh_Hans $e/zh-cn 2>/dev/null
-    fi
-done
-
 # 取消主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -print -exec sed -i '/set luci.main.mediaurlbase/d' {} \;
 
@@ -225,35 +201,49 @@ sed -i 's/\"终端\"/\"TTYD 终端\"/g' feeds/luci/applications/luci-app-ttyd/po
 # 设置 nlbwmon 独立菜单
 sed -i 's/services\/nlbw/nlbw/g; /path/s/admin\///g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json
 sed -i 's/services\///g' feeds/luci/applications/luci-app-nlbwmon/htdocs/luci-static/resources/view/nlbw/config.js
-status 加载个人设置
+
+# 修复 Makefile 路径
+find $destination_dir/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i \
+    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?' \
+    -e 's?include \.\./\.\./\(lang\|devel\)?include $(TOPDIR)/feeds/packages/\1?' {}
+
+# 转换插件语言翻译
+for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
+    if [[ -d $e/zh-cn && ! -d $e/zh_Hans ]]; then
+        ln -s zh-cn $e/zh_Hans 2>/dev/null
+    elif [[ -d $e/zh_Hans && ! -d $e/zh-cn ]]; then
+        ln -s zh_Hans $e/zh-cn 2>/dev/null
+    fi
+done
+status "加载个人设置"
 
 # 开始下载openchash运行内核
 [ $CLASH_KERNEL ] && {
     BEGIN_TIME=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
     $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
-    status 下载openchash运行内核
+    status "下载openchash运行内核"
 }
 
 # 开始下载zsh终端工具
 BEGIN_TIME=$(date '+%H:%M:%S')
 chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
 $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-status 下载zsh终端工具
+status "下载zsh终端工具"
 
 # 开始下载adguardhome运行内核
 [ $CLASH_KERNEL ] && {
     BEGIN_TIME=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh
     $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh $CLASH_KERNEL
-    status 下载adguardhome运行内核
+    status "下载adguardhome运行内核"
 }
 
 # 开始更新配置文件
 BEGIN_TIME=$(date '+%H:%M:%S')
 make defconfig 1>/dev/null 2>&1
-status 更新配置文件
+status "更新配置文件"
 
-echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$DEVICE_SUBTARGET-$KERNEL_VERSION)"
+echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
 
 echo -e "\e[1;35m脚本运行完成！\e[0m"

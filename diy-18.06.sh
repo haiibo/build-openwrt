@@ -14,7 +14,7 @@ status() {
     END_TIME=$(date '+%H:%M:%S')
     _date=" ==> 用时 $[$(date +%s -d "$END_TIME") - $(date +%s -d "$BEGIN_TIME")] 秒"
     [[ $_date =~ [0-9]+ ]] || _date=""
-    if [ $CHECK = 0 ]; then
+    if [[ $CHECK = 0 ]]; then
         printf "%-62s %s %s %s %s %s %s %s\n" \
         $(echo -e "$(color cy $1) [ $(color cg ✔) ]${_date}")
     else
@@ -133,11 +133,26 @@ clone_all() {
 
 # 创建插件保存目录
 destination_dir="package/A"
-[[ -d "$destination_dir" ]] || mkdir -p $destination_dir
+[ -d $destination_dir ] || mkdir -p $destination_dir
 
 color cy "添加&替换插件"
+
 # 添加额外插件
 git_clone https://github.com/kongfl888/luci-app-adguardhome
+clone_all https://github.com/sirpdboy/luci-app-ddns-go
+
+clone_all lua https://github.com/sbwml/luci-app-alist
+clone_all v5-lua https://github.com/sbwml/luci-app-mosdns
+git_clone https://github.com/sbwml/packages_lang_golang golang
+
+git_clone lede https://github.com/pymumu/luci-app-smartdns
+git_clone https://github.com/pymumu/openwrt-smartdns smartdns
+
+git_clone https://github.com/ximiTech/luci-app-msd_lite
+git_clone https://github.com/ximiTech/msd_lite
+
+clone_all https://github.com/linkease/istore-ui
+clone_all https://github.com/linkease/istore luci
 
 # 科学上网插件
 clone_all https://github.com/fw876/helloworld
@@ -159,30 +174,6 @@ sed -i "s|firmware_repo.*|firmware_repo 'https://github.com/$GITHUB_REPOSITORY'|
 # sed -i "s|kernel_path.*|kernel_path 'https://github.com/ophub/kernel'|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 
-# SmartDNS
-git_clone lede https://github.com/pymumu/luci-app-smartdns
-git_clone https://github.com/pymumu/openwrt-smartdns smartdns
-
-# msd_lite
-git_clone https://github.com/ximiTech/luci-app-msd_lite
-git_clone https://github.com/ximiTech/msd_lite
-
-# MosDNS
-clone_all v5-lua https://github.com/sbwml/luci-app-mosdns
-
-# Alist
-clone_all lua https://github.com/sbwml/luci-app-alist
-
-# Golang
-git_clone https://github.com/sbwml/packages_lang_golang golang
-
-# DDNS-GO
-clone_all https://github.com/sirpdboy/luci-app-ddns-go
-
-# iStore
-clone_all https://github.com/linkease/istore-ui
-clone_all https://github.com/linkease/istore luci
-
 # 开始加载个人设置
 BEGIN_TIME=$(date '+%H:%M:%S')
 
@@ -195,26 +186,15 @@ sed -i 's/192.168.1.1/192.168.1.2/g' package/base-files/files/bin/config_generat
 # TTYD 免登录
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
+# 设置 root 用户密码为空
+# sed -i '/CYXluq4wUazHjmCDBCqXF/d' package/lean/default-settings/files/zzz-default-settings 
+
 # 更改 Argon 主题背景
 cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/bg1.jpg
 
 # x86 型号只显示 CPU 型号
 sed -i 's/${g}.*/${a}${b}${c}${d}${e}${f}${hydrid}/g' package/lean/autocore/files/x86/autocore
 sed -i "s/'C'/'Core '/g; s/'T '/'Thread '/g" package/lean/autocore/files/x86/autocore
-
-# 修复 Makefile 路径
-find $destination_dir/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i \
-    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?' \
-    -e 's?include \.\./\.\./\(lang\|devel\)?include $(TOPDIR)/feeds/packages/\1?' {}
-
-# 转换插件语言翻译
-for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
-    if [[ -d $e/zh-cn && ! -d $e/zh_Hans ]]; then
-        ln -s zh-cn $e/zh_Hans 2>/dev/null
-    elif [[ -d $e/zh_Hans && ! -d $e/zh-cn ]]; then
-        ln -s zh_Hans $e/zh-cn 2>/dev/null
-    fi
-done
 
 # 取消主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -print -exec sed -i '/set luci.main.mediaurlbase/d' {} \;
@@ -234,35 +214,49 @@ sed -i 's|admin\\|admin\\/services\\|g' feeds/luci/applications/luci-app-dockerm
 
 # 取消对 samba4 的菜单调整
 # sed -i '/samba4/s/^/#/' package/lean/default-settings/files/zzz-default-settings
-status 加载个人设置
+
+# 修复 Makefile 路径
+find $destination_dir/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i \
+    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?' \
+    -e 's?include \.\./\.\./\(lang\|devel\)?include $(TOPDIR)/feeds/packages/\1?' {}
+
+# 转换插件语言翻译
+for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
+    if [[ -d $e/zh-cn && ! -d $e/zh_Hans ]]; then
+        ln -s zh-cn $e/zh_Hans 2>/dev/null
+    elif [[ -d $e/zh_Hans && ! -d $e/zh-cn ]]; then
+        ln -s zh_Hans $e/zh-cn 2>/dev/null
+    fi
+done
+status "加载个人设置"
 
 # 开始下载openchash运行内核
 [ $CLASH_KERNEL ] && {
     BEGIN_TIME=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
     $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
-    status 下载openchash运行内核
+    status "下载openchash运行内核"
 }
 
 # 开始下载zsh终端工具
 BEGIN_TIME=$(date '+%H:%M:%S')
 chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
 $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-status 下载zsh终端工具
+status "下载zsh终端工具"
 
 # 开始下载adguardhome运行内核
 [ $CLASH_KERNEL ] && {
     BEGIN_TIME=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh
     $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh $CLASH_KERNEL
-    status 下载adguardhome运行内核
+    status "下载adguardhome运行内核"
 }
 
 # 开始更新配置文件
 BEGIN_TIME=$(date '+%H:%M:%S')
 make defconfig 1>/dev/null 2>&1
-status 更新配置文件
+status "更新配置文件"
 
-echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$DEVICE_SUBTARGET-$KERNEL_VERSION)"
+echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
 
 echo -e "\e[1;35m脚本运行完成！\e[0m"

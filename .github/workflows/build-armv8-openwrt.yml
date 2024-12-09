@@ -3,7 +3,7 @@ name: build armv8 openwrt
 on:
   workflow_dispatch:
   schedule:
-    - cron: 30 14 * * *
+    - cron: 30 14 */3 * *
   watch:
     types: started
 
@@ -11,7 +11,7 @@ env:
   CLASH_KERNEL: arm64
   CACHE_TOOLCHAIN: true
   UPLOAD_BIN_DIR: false
-  UPLOAD_ARTIFACT: false
+  UPLOAD_ARTIFACT: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
@@ -27,7 +27,7 @@ jobs:
         branch: [18.06, 23.05]
 
     env:
-      CONFIG_FILE: configs/${{ matrix.target }}.config
+      CONFIG_FILE: configs/${{ matrix.target }}-${{ matrix.branch }}.config
       DIY_SCRIPT: diy-${{ matrix.branch }}.sh
       RELEASE_TAG: ${{ matrix.target }}-${{ matrix.branch }}
 
@@ -37,14 +37,12 @@ jobs:
 
     - name: Set Compile Source Code
       run: |
-        if [ ${{ matrix.branch }} == '18.06' ]; then
-          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >> $GITHUB_ENV
-          echo "REPO_BRANCH=master" >> $GITHUB_ENV
-          echo -e "CONFIG_TARGET_armvirt=y\nCONFIG_TARGET_armvirt_64=y" >> $CONFIG_FILE
-        elif [ ${{ matrix.branch }} == '23.05' ]; then
-          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >> $GITHUB_ENV
-          echo "REPO_BRANCH=openwrt-23.05" >> $GITHUB_ENV
-          echo -e "CONFIG_TARGET_armsr=y\nCONFIG_TARGET_armsr_armv8=y" >> $CONFIG_FILE
+        if [[ ${{ matrix.branch }} == '18.06' ]]; then
+          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
+          echo "REPO_BRANCH=master" >>$GITHUB_ENV
+        elif [[ ${{ matrix.branch }} == '23.05' ]]; then
+          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
+          echo "REPO_BRANCH=openwrt-23.05" >>$GITHUB_ENV
         fi
 
     - name: Check Server Performance
@@ -102,15 +100,15 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
-        echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
+        echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
         COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")
-        echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >> $GITHUB_ENV
+        echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >>$GITHUB_ENV
         COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")
-        echo "COMMIT_DATE=$COMMIT_DATE" >> $GITHUB_ENV
+        echo "COMMIT_DATE=$COMMIT_DATE" >>$GITHUB_ENV
         COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")
-        echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
+        echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >>$GITHUB_ENV
         COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
-        echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+        echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
 
     - name: Generate Variables
       run: |
@@ -118,27 +116,28 @@ jobs:
         cd $OPENWRT_PATH
         make defconfig >/dev/null 2>&1
         SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
-        echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
-        DEVICE_TARGET=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
-        echo "DEVICE_TARGET=$DEVICE_TARGET" >> $GITHUB_ENV
-        DEVICE_SUBTARGET=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
-        echo "DEVICE_SUBTARGET=$DEVICE_SUBTARGET" >> $GITHUB_ENV
-        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$DEVICE_TARGET/Makefile)
+        echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
+        echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
+        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
+        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
+        echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
         KERNEL_VERSION=$(sed -n 2p include/kernel-$KERNEL | awk '{print $1}' | awk -F '-' '{print $2}')
-        echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
+        echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
     - name: Cache Toolchain
       if: env.CACHE_TOOLCHAIN == 'true'
       uses: HiGarfield/cachewrtbuild@main
       with:
         ccache: false
-        mixkey: ${{ env.SOURCE_REPO }}-${{ env.REPO_BRANCH }}-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
+        mixkey: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}
         prefix: ${{ env.OPENWRT_PATH }}
 
     - name: Install Feeds
       run: |
         cd $OPENWRT_PATH
-        if [ $SOURCE_REPO == 'lede' ]; then
+        if [[ $SOURCE_REPO == 'lede' ]]; then
           sed -i '/luci/s/^#//; /openwrt-23.05/s/^/#/' feeds.conf.default
         fi
         ./scripts/feeds update -a
@@ -166,11 +165,11 @@ jobs:
         mkdir -p files/etc/uci-defaults
         cp $GITHUB_WORKSPACE/scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        make -j$(nproc) || make -j1 V=s
         DEFAULT_IP=$(cat package/base-files/files/bin/config_generate | grep 'n) ipad' | cut -d '"' -f2)
-        echo "DEFAULT_IP=$DEFAULT_IP" >> $GITHUB_ENV
-        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
-        echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
+        echo "DEFAULT_IP=$DEFAULT_IP" >>$GITHUB_ENV
+        echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
+        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
 
     - name: Check Space Usage
       if: (!cancelled())
@@ -180,7 +179,7 @@ jobs:
       if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
       uses: actions/upload-artifact@main
       with:
-        name: ${{ env.SOURCE_REPO }}-bin-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
+        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-bin-${{ env.FILE_DATE }}
         path: ${{ env.OPENWRT_PATH }}/bin
 
     - name: Packaging OpenWrt
@@ -199,13 +198,13 @@ jobs:
       run: |
         cd $OPENWRT_PATH/bin/targets/*/*
         cat config.buildinfo
-        cp $OPENWRT_PATH/.config build.config
-        mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
+        cp -rf $OPENWRT_PATH/bin/packages/* packages
         tar -zcf packages.tar.gz packages
-        rm -rf packages u-boot-qemu* feeds.buildinfo version.buildinfo sha256sums *.manifest *.bin
-        echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
+        sleep 3s && rm -rf packages u-boot-qemu* sha256sums *.buildinfo *.manifest *.bin
+        sed '/^$/d' $OPENWRT_PATH/.config >config.txt
+        echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
         cd $PACKAGED_OUTPUTPATH && rm -f *rootfs.tar.gz *.sha
-        if [ $SOURCE_REPO == 'immortalwrt' ]; then
+        if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
           rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
         fi
 
@@ -219,16 +218,16 @@ jobs:
       if: env.PACKAGED_STATUS == 'success' && env.UPLOAD_RELEASE == 'true'
       uses: ncipollo/release-action@main
       with:
-        name: ${{ env.DATE }} for ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
+        name: ${{ env.DATE }} for ${{ env.DEVICE_TARGET }}
         allowUpdates: true
         removeArtifacts: true
         tag: ${{ env.RELEASE_TAG }}
         token: ${{ secrets.GITHUB_TOKEN }}
         artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
         body: |
-          **This is OpenWrt Firmware for ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}**
+          **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
           ### 📒 固件信息
-          - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
+          - 💻 平台架构: ${{ env.DEVICE_TARGET }}
           - ⚽ 固件源码: ${{ env.REPO_URL }}
           - 💝 源码分支: ${{ env.REPO_BRANCH }}
           - 🚀 内核版本: ${{ env.KERNEL_VERSION }}

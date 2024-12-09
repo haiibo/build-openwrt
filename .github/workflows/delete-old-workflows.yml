@@ -3,10 +3,10 @@ name: delete old workflows
 on:
   workflow_dispatch:
   schedule:
-    - cron: 0 17 * * *
+    - cron: 0 17 * * 5
 
 jobs:
-  Cleaning:
+  cleaning:
     runs-on: ubuntu-22.04
 
     steps:
@@ -14,7 +14,7 @@ jobs:
       uses: Mattraks/delete-workflow-runs@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: 14
+        retain_days: 15
         keep_minimum_runs: 0
 
     - name: Delete Old Releases
