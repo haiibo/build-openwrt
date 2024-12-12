@@ -1,0 +1,192 @@
+name: packaging armv8 openwrt
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_repo:
+        description: '选择打包脚本储存库'
+        required: false
+        default: 'flippy'
+        type: choice
+        options: [flippy, ophub]
+
+      openwrt_board:
+        description: '设置设备(CPU)型号'
+        required: false
+        default: 's905d_s905x3'
+
+      customize_rk3399:
+        description: '设置rk3399设备(设备型号:dtb名称)'
+        required: false
+        default: ''
+
+      openwrt_kernel:
+        description: '选择内核版本'
+        required: false
+        default: '6.1.y_6.6.y'
+        type: choice
+        options: [5.4.y, 5.10.y, 5.15.y, 6.1.y, 6.6.y, 6.1.y_6.6.y, 5.15.y_5.10.y]
+
+      kernel_repo:
+        description: '选择内核存储库'
+        required: false
+        default: 'ophub/kernel'
+        type: choice
+        options: [ophub/kernel, breakings/OpenWrt]
+
+      kernel_usage:
+        description: '选择内核存储库的标签后缀'
+        required: false
+        default: 'flippy'
+        type: choice
+        options: [flippy, stable]
+
+      builder_name:
+        description: '设置固件构建者签名'
+        required: false
+        default: 'flippy'
+
+      auto_kernel:
+        description: '自动使用最新内核'
+        required: false
+        default: true
+        type: boolean
+
+      upload_artifact:
+        description: '上传固件到Artifact'
+        required: false
+        default: false
+        type: boolean
+
+      upload_release:
+        description: '上传固件到Releases'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  packaging:
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id || ! github.event.sender.id
+    name: packaging ${{ matrix.target }} ${{ matrix.branch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [armv8]
+        branch: [18.06, 23.05]
+
+    env:
+      CONFIG_FILE: configs/${{ matrix.target }}-${{ matrix.branch }}.config
+      RELEASE_TAG: ${{ matrix.target }}-${{ matrix.branch }}
+      TZ: Asia/Shanghai
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Set Compile Source Code
+      run: |
+        if [[ ${{ matrix.branch }} == '18.06' ]]; then
+          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
+          echo "REPO_BRANCH=master" >>$GITHUB_ENV
+        elif [[ ${{ matrix.branch }} == '23.05' ]]; then
+          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
+          echo "REPO_BRANCH=openwrt-23.05" >>$GITHUB_ENV
+        fi
+
+    - name: Initialization Environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        (docker rmi $(docker images -q)
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
+        sudo -E apt-get -y update
+        sudo -E apt-get -y install rename $(curl -fsSL is.gd/depends_ubuntu_2204)
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get -y clean) &
+        sudo timedatectl set-timezone "$TZ"
+
+    - name: Clone Source Code
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        cd openwrt
+        echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
+
+    - name: Generate Variables
+      run: |
+        cp $CONFIG_FILE $OPENWRT_PATH/.config
+        cd $OPENWRT_PATH
+        make defconfig >/dev/null 2>&1
+        SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
+        echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
+        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
+        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
+        echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
+        KERNEL_VERSION=$(sed -n 2p include/kernel-$KERNEL | awk '{print $1}' | awk -F '-' '{print $2}')
+        echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
+
+    - name: Download OpenWrt Firmware
+      id: download
+      run: |
+        FIRMWARE_PATH=openwrt/bin/targets/armvirt/64
+        [ -d $FIRMWARE_PATH ] || mkdir -p $FIRMWARE_PATH
+        echo -e $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $DEVICE_TARGET.*$SOURCE_REPO.*$REPO_BRANCH | awk -F '"' '{print $4}') >release.txt
+        cd $FIRMWARE_PATH
+        wget -q $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $RELEASE_TAG/ | awk -F '"' '{print $4}' | grep -v img.gz)
+        echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
+        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
+
+    - name: Use Flippy Script Packaging
+      if: steps.download.conclusion == 'success' && github.event.inputs.script_repo == 'flippy'
+      uses: haiibo/flippy-openwrt-actions@main
+      env:
+        OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*rootfs.tar.gz
+        KERNEL_REPO_URL: ${{ github.event.inputs.kernel_repo }}
+        KERNEL_USAGE: ${{ github.event.inputs.kernel_usage }}
+        PACKAGE_SOC: ${{ github.event.inputs.openwrt_board }}
+        KERNEL_VERSION_NAME: ${{ github.event.inputs.openwrt_kernel }}
+        KERNEL_AUTO_LATEST: ${{ github.event.inputs.auto_kernel }}
+        CUSTOMIZE_RK3399: ${{ github.event.inputs.customize_rk3399 }}
+        WHOAMI: ${{ github.event.inputs.builder_name }}
+
+    - name: Use Ophub Script Packaging
+      if: steps.download.conclusion == 'success' && github.event.inputs.script_repo == 'ophub'
+      uses: ophub/amlogic-s9xxx-openwrt@main
+      with:
+        openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
+        openwrt_board: ${{ github.event.inputs.openwrt_board }}
+        openwrt_kernel: ${{ github.event.inputs.openwrt_kernel }}
+        auto_kernel: ${{ github.event.inputs.auto_kernel }}
+        kernel_repo: ${{ github.event.inputs.kernel_repo }}
+        kernel_usage: ${{ github.event.inputs.kernel_usage }}
+        builder_name: ${{ github.event.inputs.builder_name }}
+
+    - name: Organize Files
+      if: env.PACKAGED_STATUS == 'success'
+      run: |
+        cd $PACKAGED_OUTPUTPATH
+        rm -f *rootfs.tar.gz *.sha
+        if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
+          rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
+        fi
+
+    - name: Upload OpenWrt To Artifact
+      if: env.PACKAGED_STATUS == 'success' && github.event.inputs.upload_artifact == 'true'
+      uses: haiibo/upload-artifact-as-is@master
+      with:
+        path: ${{ env.PACKAGED_OUTPUTPATH }}
+
+    - name: Upload OpenWrt To Release
+      if: env.PACKAGED_STATUS == 'success' && github.event.inputs.upload_release == 'true'
+      uses: ncipollo/release-action@main
+      with:
+        name: ${{ env.DATE }} for ${{ env.DEVICE_TARGET }}
+        allowUpdates: true
+        removeArtifacts: true
+        tag: ${{ env.RELEASE_TAG }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
+        bodyFile: release.txt

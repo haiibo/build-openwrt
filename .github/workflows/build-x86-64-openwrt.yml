@@ -1,0 +1,227 @@
+name: build x86/64 openwrt
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 30 14 */3 * *
+  watch:
+    types: started
+
+env:
+  CLASH_KERNEL: amd64
+  CACHE_TOOLCHAIN: true
+  UPLOAD_BIN_DIR: false
+  UPLOAD_ARTIFACT: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id || ! github.event.sender.id
+    name: build ${{ matrix.target }} ${{ matrix.branch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86-64]
+        branch: [18.06, 23.05]
+
+    env:
+      CONFIG_FILE: configs/${{ matrix.target }}-${{ matrix.branch }}.config
+      DIY_SCRIPT: diy-${{ matrix.branch }}.sh
+      RELEASE_TAG: ${{ matrix.target }}-${{ matrix.branch }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Set Compile Source Code
+      run: |
+        if [[ ${{ matrix.branch }} == '18.06' ]]; then
+          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
+          echo "REPO_BRANCH=master" >>$GITHUB_ENV
+        elif [[ ${{ matrix.branch }} == '23.05' ]]; then
+          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
+          echo "REPO_BRANCH=openwrt-23.05" >>$GITHUB_ENV
+        fi
+
+    - name: Check Server Performance
+      run: |
+        echo "警告⚠"
+        echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
+        echo -e "已知CPU型号(降序): 7763，8370C，8272CL，8171M，E5-2673\n"
+        echo "==========================CPU信息=========================="
+        echo "CPU物理数量: $(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
+        echo "CPU线程数量: $(nproc)"
+        echo -e "CPU型号信息:$(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')\n"
+        echo "==========================内存信息=========================="
+        echo "已安装内存详细信息:"
+        echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
+        echo "==========================硬盘信息=========================="
+        echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
+
+    - name: Initialization Environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        docker rmi $(docker images -q)
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
+        sudo swapoff -a && sudo rm -f /swapfile /mnt/swapfile
+        sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+        (sudo -E apt-get -y update
+        sudo -E apt-get -y install clang $(curl -fsSL is.gd/depends_ubuntu_2204)
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get -y clean) &
+        sudo timedatectl set-timezone "$TZ"
+
+    - name: Combine Disks
+      run: |
+        MNT_SIZE=$((($(df --block-size=1024 --output=avail /mnt | tail -1) - 1024*1024*1) * 1024))
+        sudo fallocate -l $MNT_SIZE /mnt/mnt.img
+        MNT_NAME=$(sudo losetup -Pf --show /mnt/mnt.img)
+        sudo pvcreate -f $MNT_NAME
+        ROOT_SIZE=$((($(df --block-size=1024 --output=avail / | tail -1) - 1024*1024*4) * 1024))
+        sudo fallocate -l $ROOT_SIZE /root.img
+        ROOT_NAME=$(sudo losetup -Pf --show /root.img)
+        sudo pvcreate -f $ROOT_NAME
+        sudo vgcreate actions $MNT_NAME $ROOT_NAME
+        sudo lvcreate -n disk -l 100%FREE actions
+        LV_NAME=$(sudo lvscan | awk -F "'" '{print $2}')
+        sudo mkfs.btrfs -L combinedisk $LV_NAME
+        sudo mkdir -p /workdir
+        sudo mount -o compress=zstd $LV_NAME /workdir
+        sudo chown -R runner:runner /workdir && df -hT
+
+    - name: Clone Source Code
+      working-directory: /workdir
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        cd openwrt
+        echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
+        COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")
+        echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >>$GITHUB_ENV
+        COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")
+        echo "COMMIT_DATE=$COMMIT_DATE" >>$GITHUB_ENV
+        COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")
+        echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >>$GITHUB_ENV
+        COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
+        echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
+
+    - name: Generate Variables
+      run: |
+        cp $CONFIG_FILE $OPENWRT_PATH/.config
+        cd $OPENWRT_PATH
+        make defconfig >/dev/null 2>&1
+        SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
+        echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
+        echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
+        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
+        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
+        echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
+        KERNEL_VERSION=$(sed -n 2p include/kernel-$KERNEL | awk '{print $1}' | awk -F '-' '{print $2}')
+        echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
+
+    - name: Cache Toolchain
+      if: env.CACHE_TOOLCHAIN == 'true'
+      uses: HiGarfield/cachewrtbuild@main
+      with:
+        ccache: false
+        mixkey: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}
+        prefix: ${{ env.OPENWRT_PATH }}
+
+    - name: Install Feeds
+      run: |
+        cd $OPENWRT_PATH
+        if [[ $SOURCE_REPO == 'lede' ]]; then
+          sed -i '/luci/s/^#//; /openwrt-23.05/s/^/#/' feeds.conf.default
+        fi
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Load Custom Configuration
+      run: |
+        [ -e files ] && mv files $OPENWRT_PATH/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRT_PATH/.config
+        chmod +x $DIY_SCRIPT
+        cd $OPENWRT_PATH
+        $GITHUB_WORKSPACE/$DIY_SCRIPT
+
+    - name: Download DL Package
+      run: |
+        cd $OPENWRT_PATH
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Compile Firmware
+      id: compile
+      run: |
+        cd $OPENWRT_PATH
+        mkdir -p files/etc/uci-defaults
+        cp $GITHUB_WORKSPACE/scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) || make -j1 V=s
+        DEFAULT_IP=$(cat package/base-files/files/bin/config_generate | grep 'n) ipad' | cut -d '"' -f2)
+        echo "DEFAULT_IP=$DEFAULT_IP" >>$GITHUB_ENV
+        echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
+        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
+
+    - name: Check Space Usage
+      if: (!cancelled())
+      run: df -hT
+
+    - name: Upload Bin Directory
+      if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      uses: actions/upload-artifact@main
+      with:
+        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-bin-${{ env.FILE_DATE }}
+        path: ${{ env.OPENWRT_PATH }}/bin
+
+    - name: Organize Files
+      if: steps.compile.conclusion == 'success'
+      run: |
+        cd $OPENWRT_PATH/bin/targets/*/*
+        cat config.buildinfo
+        cp -rf $OPENWRT_PATH/bin/packages/* packages
+        tar -zcf packages.tar.gz packages
+        sleep 3s && rm -rf packages sha256sums *.buildinfo *.bin *.json *rootfs.img.gz
+        sed '/^$/d' $OPENWRT_PATH/.config >config.txt
+        echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
+
+    - name: Upload Firmware To Artifact
+      if: steps.compile.conclusion == 'success' && env.UPLOAD_ARTIFACT == 'true'
+      uses: actions/upload-artifact@main
+      with:
+        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_PATH }}
+
+    - name: Upload Firmware To Release
+      if: steps.compile.conclusion == 'success' && env.UPLOAD_RELEASE == 'true'
+      uses: ncipollo/release-action@main
+      with:
+        name: ${{ env.DATE }} for ${{ env.DEVICE_TARGET }}
+        allowUpdates: true
+        removeArtifacts: true
+        tag: ${{ env.RELEASE_TAG }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: ${{ env.FIRMWARE_PATH }}/*
+        body: |
+          **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
+          ### 📒 固件信息
+          - 💻 平台架构: ${{ env.DEVICE_TARGET }}
+          - ⚽ 固件源码: ${{ env.REPO_URL }}
+          - 💝 源码分支: ${{ env.REPO_BRANCH }}
+          - 🚀 内核版本: ${{ env.KERNEL_VERSION }}
+          - 🌐 默认地址: ${{ env.DEFAULT_IP }}
+          - 🔑 默认密码: password
+          ### 🧊 固件版本
+          - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
+          - ${{ env.COMMIT_AUTHOR }}
+          - ${{ env.COMMIT_DATE }}
+          - ${{ env.COMMIT_MESSAGE }}
+          - ${{ env.COMMIT_HASH }}
