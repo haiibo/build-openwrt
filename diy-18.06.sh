@@ -175,7 +175,7 @@ sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/confi
 begin_time=$(date '+%H:%M:%S')
 
 # 修改默认IP
-sed -i 's/192.168.1.1/192.168.1.2/g' package/base-files/files/bin/config_generate
+[ $DEFAULT_IP ] && sed -i '/n) ipad/s/".*"/"'"$DEFAULT_IP"'"/' package/base-files/files/bin/config_generate
 
 # 更改默认 Shell 为 zsh
 # sed -i 's/\/bin\/ash/\/usr\/bin\/zsh/g' package/base-files/files/etc/passwd
@@ -236,10 +236,12 @@ status "加载个人设置"
 }
 
 # 开始下载zsh终端工具
-begin_time=$(date '+%H:%M:%S')
-chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-$GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-status "下载zsh终端工具"
+[[ $ZSH_TOOL = 'true' ]] && {
+    begin_time=$(date '+%H:%M:%S')
+    chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
+    $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
+    status "下载zsh终端工具"
+}
 
 # 开始下载adguardhome运行内核
 [ $CLASH_KERNEL ] && {

@@ -1,26 +1,83 @@
 name: delete old workflows
 
 on:
+#  schedule: [cron: 0 17 * * 5]
   workflow_dispatch:
-  schedule:
-    - cron: 0 17 * * 5
+    inputs:
+      delete_releases:
+        description: '删除Releases文件'
+        required: true
+        default: true
+        type: boolean
+
+      delete_tags:
+        description: '删除Releases标签'
+        required: false
+        default: true
+        type: boolean
+
+      releases_keep_latest:
+        description: '保留最新Releases数量'
+        required: false
+        default: '5'
+        type: choice
+        options: [30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+      releases_keep_keyword:
+        description: '保留Releases关键字'
+        required: false
+        default: 'toolchain'
+
+      delete_workflows:
+        description: '删除Workflows记录'
+        required: true
+        default: true
+        type: boolean
+
+      workflows_keep_day:
+        description: '保留Workflows天数'
+        required: false
+        default: '1'
+        type: choice
+        options: [30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+      workflows_keep_keyword:
+        description: '保留Workflows关键字'
+        required: false
+        default: ''
+
+      out_log:
+        description: '输出详细JSON日志'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  TZ: Asia/Shanghai
 
 jobs:
   cleaning:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Delete Old Workflows
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: 15
-        keep_minimum_runs: 0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Delete Old Releases
-      uses: dev-drprasad/delete-older-releases@master
-      with:
-        keep_latest: 15
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Initialization environment
+        id: init
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: sudo timedatectl set-timezone "$TZ"
+
+      - name: Delete releases and workflows runs
+        uses: ophub/delete-releases-workflows@main
+        with:
+          delete_releases: ${{ github.event.inputs.delete_releases }}
+          delete_tags: ${{ github.event.inputs.delete_tags }}
+          releases_keep_latest: ${{ github.event.inputs.releases_keep_latest }}
+          releases_keep_keyword: ${{ github.event.inputs.releases_keep_keyword }}
+          delete_workflows: ${{ github.event.inputs.delete_workflows }}
+          workflows_keep_day: ${{ github.event.inputs.workflows_keep_day }}
+          workflows_keep_keyword: ${{ github.event.inputs.workflows_keep_keyword }}
+          out_log: ${{ github.event.inputs.out_log }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
