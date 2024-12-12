@@ -121,8 +121,8 @@ jobs:
         make defconfig >/dev/null 2>&1
         SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
         echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
-        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
-        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        TARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_BOARD/{print $2}' .config)
+        SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
         DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
         echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
         KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)

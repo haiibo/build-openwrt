@@ -18,6 +18,12 @@ on:
         required: false
         default: '192.168.1.2'
 
+#      free_disk:
+#        description: '清理释放磁盘空间'
+#        required: false
+#        default: false
+#        type: boolean
+
       toolchain:
         description: '使用toolchain缓存'
         required: false
@@ -59,6 +65,7 @@ jobs:
 
     env:
       DEFAULT_IP: ${{ github.event.inputs.ip }}
+      TOOLCHAIN: ${{ github.event.inputs.toolchain }}
       ZSH_TOOL: ${{ github.event.inputs.zsh_tool }}
       CLASH_KERNEL: ${{ github.event.inputs.openclash }}
       CONFIG_FILE: configs/armv8-${{ github.event.inputs.source }}.config
@@ -71,16 +78,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@main
-
-    - name: Set Compile Source Code
-      run: |
-        if [[ ${{ github.event.inputs.source }} == '18.06' ]]; then
-          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
-          echo "REPO_BRANCH=master" >>$GITHUB_ENV
-        elif [[ ${{ github.event.inputs.source }} == '23.05' ]]; then
-          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
-          echo "REPO_BRANCH=openwrt-23.05" >>$GITHUB_ENV
-        fi
 
     - name: Check Server Performance
       run: |
@@ -96,6 +93,18 @@ jobs:
         echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
         echo "==========================硬盘信息=========================="
         echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
+
+#    - name: Free Disk Space
+#      if: github.event.inputs.free_disk == 'true'
+#      uses: jlumbroso/free-disk-space@main
+#      with:
+#        tool-cache: true
+#        android: true
+#        dotnet: true
+#        haskell: true
+#        large-packages: true
+#        docker-images: true
+#        swap-storage: true
 
     - name: Initialization Environment
       env:
@@ -130,90 +139,19 @@ jobs:
         sudo mount -o compress=zstd $LV_NAME /workdir
         sudo chown -R runner:runner /workdir && df -hT
 
-    - name: Clone Source Code
-      working-directory: /workdir
-      run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
-        cd openwrt
-        echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
-        COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")
-        echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >>$GITHUB_ENV
-        COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")
-        echo "COMMIT_DATE=$COMMIT_DATE" >>$GITHUB_ENV
-        COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")
-        echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >>$GITHUB_ENV
-        COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
-        echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
-
-    - name: Generate Variables
-      run: |
-        cp $CONFIG_FILE $OPENWRT_PATH/.config
-        cd $OPENWRT_PATH
-        make defconfig >/dev/null 2>&1
-        SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
-        echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
-        echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
-        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
-        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
-        DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
-        echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
-        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
-        KERNEL_VERSION=$(sed -n 2p include/kernel-$KERNEL | awk '{print $1}' | awk -F '-' '{print $2}')
-        echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
-
-    - name: Prepare Toolchain
-      if: github.event.inputs.toolchain == 'true'
-      id: tools
-      run: |
-        cd $OPENWRT_PATH
-        TOOLS_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
-        CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
-        echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
-        wget -q https://github.com/$GITHUB_REPOSITORY/releases/download/$TOOLCHAIN_TAG/$CACHE_NAME.tzst || true
-        if [ -e *.tzst ]; then
-          tar -I unzstd -xf *.tzst || tar -xf *.tzst
-          [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile || \
-          echo -e "\e[1;31m解压Toolchain缓存失败\e[0m"
-        else
-          echo -e "\e[1;33m没有找到最新的Toolchain缓存，开始重新编译\e[0m"
-          echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_OUTPUT
-        fi
-
-    - name: Install Feeds
-      run: |
-        cd $OPENWRT_PATH
-        if [[ $SOURCE_REPO == 'lede' ]]; then
-          sed -i '/luci/s/^#//; /openwrt-23.05/s/^/#/' feeds.conf.default
-        fi
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    - name: Load Custom Configuration
-      run: |
-        [ -e files ] && mv files $OPENWRT_PATH/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRT_PATH/.config
-        chmod +x $DIY_SCRIPT
-        cd $OPENWRT_PATH
-        $GITHUB_WORKSPACE/$DIY_SCRIPT
+    - name: Load Compile Script
+      run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
     - name: Compile Toolchain
-      if: steps.tools.outputs.REBUILD_TOOLCHAIN == 'true' || github.event.inputs.toolchain == 'false'
+      if: env.REBUILD_TOOLCHAIN == 'true'
       id: toolchain
       run: |
-        mkdir -p $GITHUB_WORKSPACE/output
         cd $OPENWRT_PATH
         make toolchain/compile -j$(nproc) || make toolchain/compile -j1 V=s
-        sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
-        echo -e "\e[1;33m开始打包toolchain目录\e[0m"
-        [ -d ".ccache" ] && (ccache=".ccache"; ls -alh .ccache)
-        tar -I zstdmt -cf $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst staging_dir/host* staging_dir/tool* $ccache
-        ls -lh $GITHUB_WORKSPACE/output
-        [ -e $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst ]
+        $GITHUB_WORKSPACE/$DIY_SCRIPT
 
     - name: Delete Old Toolchain
-      if: steps.toolchain.conclusion == 'success'
+      if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
       uses: mknejp/delete-release-assets@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -223,7 +161,7 @@ jobs:
         fail-if-no-release: false
 
     - name: Upload Toolchain To Release
-      if: steps.toolchain.conclusion == 'success'
+      if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
       uses: softprops/action-gh-release@master
       with:
         name: toolchain-cache
@@ -235,7 +173,8 @@ jobs:
     - name: Download DL Package
       run: |
         cd $OPENWRT_PATH
-        make download -j$(nproc)
+        # make download -j$(nproc)
+        make package/download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
@@ -249,10 +188,6 @@ jobs:
         make -j$(nproc) || make -j1 V=s
         echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
-
-    - name: Check Space Usage
-      if: (!cancelled())
-      run: df -hT
 
     - name: Upload Bin Directory
       if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
@@ -275,6 +210,10 @@ jobs:
     - name: Organize Files
       if: env.PACKAGED_STATUS == 'success'
       run: |
+        df -hT
+        echo "==============================="
+        ls $OPENWRT_PATH/bin/targets/*/*
+        echo "==============================="
         cd $OPENWRT_PATH/bin/targets/*/*
         cat config.buildinfo
         cp -rf $OPENWRT_PATH/bin/packages/* packages
