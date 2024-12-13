@@ -176,7 +176,7 @@ jobs:
 
     - name: Upload Toolchain To Release
       if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
-      uses: softprops/action-gh-release@master
+      uses: softprops/action-gh-release@v2
       with:
         name: toolchain-cache
         tag_name: ${{ env.TOOLCHAIN_TAG }}

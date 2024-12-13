@@ -22,6 +22,8 @@ color() {
         cg) echo -e "\e[1;32m$2\e[0m" ;;
         cy) echo -e "\e[1;33m$2\e[0m" ;;
         cb) echo -e "\e[1;34m$2\e[0m" ;;
+        cp) echo -e "\e[1;35m$2\e[0m" ;;
+        cc) echo -e "\e[1;36m$2\e[0m" ;;
     esac
 }
 
@@ -31,10 +33,10 @@ status() {
     [[ $total_time =~ [0-9]+ ]] || total_time=""
     if [[ $check = 0 ]]; then
         printf "%-62s %s %s %s %s %s %s %s\n" \
-        $(color cy $1) [ $(color cg ✔) ] $total_time
+        $(color cy $1) [ $(color cg ✔) ] $(echo -e "\e[1m$total_time")
     else
         printf "%-62s %s %s %s %s %s %s %s\n" \
-        $(color cy $1) [ $(color cr ✕) ] $total_time
+        $(color cy $1) [ $(color cr ✕) ] $(echo -e "\e[1m$total_time")
     fi
 }
 
@@ -43,8 +45,9 @@ find_dir() {
 }
 
 print_info() {
-    read -r param1 param2 param3 param4 param5 <<< $1
-    printf "%s %-40s %s %s %s\n" $param1 $param2 $param3 $param4 $param5
+    printf "%s %-40s %s %s %s\n" $1 $2 $3 $4 $5
+    # read -r param1 param2 param3 param4 param5 <<< $1
+    # printf "%s %-40s %s %s %s\n" $param1 $param2 $param3 $param4 $param5
 }
 
 # 添加整个源仓库(git clone)
@@ -64,17 +67,17 @@ git_clone() {
         target_dir="${repo_url##*/}"
     fi
     git clone -q $branch --depth=1 $repo_url $target_dir 2>/dev/null || {
-        print_info "$(color cr 拉取) $repo_url [ $(color cr ✕) ]"
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
         return 0
     }
     rm -rf $target_dir/{.git*,README*.md,LICENSE}
     current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
     if ([[ -d $current_dir ]] && rm -rf $current_dir); then
         mv -f $target_dir ${current_dir%/*}
-        print_info "$(color cg 替换) $target_dir [ $(color cg ✔) ]"
+        print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
     else
         mv -f $target_dir $destination_dir
-        print_info "$(color cb 添加) $target_dir [ $(color cb ✔) ]"
+        print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
     fi
 }
 
@@ -90,7 +93,7 @@ clone_dir() {
         shift 2
     fi
     git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info "$(color cr 拉取) $repo_url [ $(color cr ✕) ]"
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
         return 0
     }
     local target_dir source_dir current_dir
@@ -99,16 +102,16 @@ clone_dir() {
         [[ -d $source_dir ]] || \
         source_dir=$(find $temp_dir -maxdepth 4 -type d -name $target_dir -print -quit) && \
         [[ -d $source_dir ]] || {
-            print_info "$(color cr 查找) $target_dir [ $(color cr ✕) ]"
+            print_info $(color cr 查找) $target_dir [ $(color cr ✕) ]
             continue
         }
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
         if ([[ -d $current_dir ]] && rm -rf $current_dir); then
             mv -f $source_dir ${current_dir%/*}
-            print_info "$(color cg 替换) $target_dir [ $(color cg ✔) ]"
+            print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
         else
             mv -f $source_dir $destination_dir
-            print_info "$(color cb 添加) $target_dir [ $(color cb ✔) ]"
+            print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
         fi
     done
     rm -rf $temp_dir
@@ -126,7 +129,7 @@ clone_all() {
         shift 2
     fi
     git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info "$(color cr 拉取) $repo_url [ $(color cr ✕) ]"
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
         return 0
     }
     local target_dir source_dir current_dir
@@ -135,10 +138,10 @@ clone_all() {
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
         if ([[ -d $current_dir ]] && rm -rf $current_dir); then
             mv -f $source_dir ${current_dir%/*}
-            print_info "$(color cg 替换) $target_dir [ $(color cg ✔) ]"
+            print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
         else
             mv -f $source_dir $destination_dir
-            print_info "$(color cb 添加) $target_dir [ $(color cb ✔) ]"
+            print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
         fi
     done
     rm -rf $temp_dir
@@ -355,4 +358,4 @@ echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-
 # sed -i "s/\$(VERSION_DIST_SANITIZED)/$SOURCE_REPO-${REPO_BRANCH#*-}-$KERNEL_VERSION/" include/image.mk
 # sed -i "/IMG_PREFIX:/ {s/=/=$SOURCE_REPO-${REPO_BRANCH#*-}-$KERNEL_VERSION-\$(shell date +%y.%m.%d)-/}" include/image.mk
 
-echo -e "\e[1;35m脚本运行完成！\e[0m"
+color cp "脚本运行完成！"
