@@ -176,8 +176,9 @@ jobs:
 
     - name: Upload OpenWrt To Artifact
       if: env.PACKAGED_STATUS == 'success' && github.event.inputs.upload_artifact == 'true'
-      uses: haiibo/upload-artifact-as-is@master
+      uses: actions/upload-artifact@main
       with:
+        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
         path: ${{ env.PACKAGED_OUTPUTPATH }}
 
     - name: Upload OpenWrt To Release
