@@ -255,6 +255,7 @@ clone_all https://github.com/xiaorouji/openwrt-passwall-packages
 clone_all https://github.com/xiaorouji/openwrt-passwall
 clone_all https://github.com/xiaorouji/openwrt-passwall2
 clone_dir https://github.com/vernesong/OpenClash luci-app-openclash
+clone_dir https://github.com/sbwml/openwrt_helloworld shadowsocks-rust
 
 # Themes
 git_clone https://github.com/kiddin9/luci-theme-edge
