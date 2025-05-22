@@ -31,15 +31,13 @@ on:
         description: '选择内核版本'
         required: false
         default: '6.1.y_6.6.y'
-        type: choice
-        options: [5.4.y, 5.10.y, 5.15.y, 6.1.y, 6.6.y, 6.1.y_6.6.y, 5.15.y_5.10.y]
 
       kernel_repo:
         description: '选择内核存储库'
         required: false
         default: 'ophub/kernel'
         type: choice
-        options: [ophub/kernel, breakings/OpenWrt]
+        options: [ophub/kernel, breakingbadboy/OpenWrt]
 
       kernel_usage:
         description: '选择内核存储库的标签后缀'
@@ -99,9 +97,9 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        (docker rmi $(docker images -q)
+        docker rmi $(docker images -q)
         sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
-        sudo -E apt-get -y update
+        (sudo -E apt-get -y update
         sudo -E apt-get -y install rename $(curl -fsSL is.gd/depends_ubuntu_2204)
         sudo -E apt-get -y autoremove --purge
         sudo -E apt-get -y clean) &
