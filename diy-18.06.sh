@@ -169,7 +169,7 @@ ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 
 # 设置luci版本为18.06
-sed -i '/luci/s/^#//; /openwrt-23.05/s/^/#/' feeds.conf.default
+sed -i '/luci/s/^#//; /luci.git/s/^/#/' feeds.conf.default
 
 # 开始生成全局变量
 begin_time=$(date '+%H:%M:%S')
