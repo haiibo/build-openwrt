@@ -40,6 +40,8 @@ on:
         description: '预设openclash内核'
         required: false
         default: 'arm64'
+        type: choice
+        options: [false, amd64, arm64, armv7, armv6, armv5, 386]
 
       artifact:
         description: '上传固件到Artifact'
