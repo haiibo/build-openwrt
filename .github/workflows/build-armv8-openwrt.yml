@@ -16,7 +16,7 @@ on:
       ip:
         description: '设置默认登录IP'
         required: false
-        default: '192.168.1.2'
+        default: '10.0.0.2'
 
 #      free_disk:
 #        description: '清理释放磁盘空间'
