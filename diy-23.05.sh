@@ -133,7 +133,7 @@ clone_all() {
         return 0
     }
     local target_dir source_dir current_dir
-    for target_dir in $(ls -l $temp_dir/$@ | awk '/^d/{print $NF}'); do
+    for target_dir in $(ls -l $temp_dir/$@ | awk '/^d/ {print $NF}'); do
         source_dir=$(find_dir "$temp_dir" "$target_dir")
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
         if ([[ -d $current_dir ]] && rm -rf $current_dir); then
