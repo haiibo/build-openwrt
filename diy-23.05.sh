@@ -132,23 +132,18 @@ clone_all() {
         print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
         return 0
     }
-    local delete_dir target_dir current_dir
-    if [[ "$@" ]]; then
-        for delete_dir in "$@"; do
-            rm -rf $temp_dir/$delete_dir
-        done
-    fi
-    while read -r -d '' target_dir; do
-        target_dir=$(basename "$target_dir")
+    local target_dir source_dir current_dir
+    for target_dir in $(ls -l $temp_dir/$@ | awk '/^d/{print $NF}'); do
+        source_dir=$(find_dir "$temp_dir" "$target_dir")
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
         if ([[ -d $current_dir ]] && rm -rf $current_dir); then
-            mv -f $temp_dir/$target_dir ${current_dir%/*}
+            mv -f $source_dir ${current_dir%/*}
             print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
         else
-            mv -f $temp_dir/$target_dir $destination_dir
+            mv -f $source_dir $destination_dir
             print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
         fi
-    done < <(find "$temp_dir" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -print0)
+    done
     rm -rf $temp_dir
 }
 
@@ -243,7 +238,7 @@ color cy "添加&替换插件"
 clone_dir openwrt-23.05 https://github.com/coolsnowwolf/luci luci-app-adguardhome
 git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
 clone_all https://github.com/nikkinikki-org/OpenWrt-nikki
-clone_all https://github.com/QiuSimons/luci-app-daed PIC
+clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
 
 clone_all https://github.com/sbwml/luci-app-alist
 clone_all https://github.com/sbwml/luci-app-mosdns
@@ -256,8 +251,8 @@ clone_all https://github.com/brvphoenix/luci-app-wrtbwmon
 clone_all https://github.com/brvphoenix/wrtbwmon
 
 # 科学上网插件
-clone_all https://github.com/fw876/helloworld shadowsocks-rust
-clone_all https://github.com/xiaorouji/openwrt-passwall-packages shadowsocks-rust
+clone_all https://github.com/fw876/helloworld
+clone_all https://github.com/xiaorouji/openwrt-passwall-packages
 clone_all https://github.com/xiaorouji/openwrt-passwall
 clone_all https://github.com/xiaorouji/openwrt-passwall2
 clone_dir https://github.com/vernesong/OpenClash luci-app-openclash

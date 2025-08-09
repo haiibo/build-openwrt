@@ -132,23 +132,18 @@ clone_all() {
         print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
         return 0
     }
-    local delete_dir target_dir current_dir
-    if [[ "$@" ]]; then
-        for delete_dir in "$@"; do
-            rm -rf $temp_dir/$delete_dir
-        done
-    fi
-    while read -r -d '' target_dir; do
-        target_dir=$(basename "$target_dir")
+    local target_dir source_dir current_dir
+    for target_dir in $(ls -l $temp_dir/$@ | awk '/^d/{print $NF}'); do
+        source_dir=$(find_dir "$temp_dir" "$target_dir")
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
         if ([[ -d $current_dir ]] && rm -rf $current_dir); then
-            mv -f $temp_dir/$target_dir ${current_dir%/*}
+            mv -f $source_dir ${current_dir%/*}
             print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
         else
-            mv -f $temp_dir/$target_dir $destination_dir
+            mv -f $source_dir $destination_dir
             print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
         fi
-    done < <(find "$temp_dir" -maxdepth 1 -mindepth 1 -type d -not -name '.*' -print0)
+    done
     rm -rf $temp_dir
 }
 
