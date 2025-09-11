@@ -68,11 +68,6 @@ jobs:
   packaging:
     runs-on: ubuntu-22.04
     name: packaging armv8 ${{ github.event.inputs.source_repo }}
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        target: [armv8]
-#        branch: [18.06, 23.05]
 
     env:
       CONFIG_FILE: configs/armv8-${{ github.event.inputs.source_repo }}.config

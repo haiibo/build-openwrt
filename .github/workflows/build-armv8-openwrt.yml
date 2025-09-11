@@ -1,9 +1,6 @@
 name: build armv8 openwrt
 
 on:
-#  schedule: [cron: 30 14 */3 * *]
-#  watch:
-#    types: started
   workflow_dispatch:
     inputs:
       source:
@@ -17,12 +14,6 @@ on:
         description: '设置默认登录IP'
         required: false
         default: '10.0.0.2'
-
-#      free_disk:
-#        description: '清理释放磁盘空间'
-#        required: false
-#        default: false
-#        type: boolean
 
       toolchain:
         description: '使用toolchain缓存'
@@ -59,11 +50,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     name: build armv8 ${{ github.event.inputs.source }}
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        target: [armv8]
-#        branch: [18.06, 23.05]
 
     env:
       DEFAULT_IP: ${{ github.event.inputs.ip }}
@@ -95,18 +81,6 @@ jobs:
         echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
         echo "==========================硬盘信息=========================="
         echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
-
-#    - name: Free Disk Space
-#      if: github.event.inputs.free_disk == 'true'
-#      uses: jlumbroso/free-disk-space@main
-#      with:
-#        tool-cache: true
-#        android: true
-#        dotnet: true
-#        haskell: true
-#        large-packages: true
-#        docker-images: true
-#        swap-storage: true
 
     - name: Initialization Environment
       env:
