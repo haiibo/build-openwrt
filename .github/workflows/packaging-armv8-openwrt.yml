@@ -105,6 +105,7 @@ jobs:
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
+        echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
         echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 
     - name: Generate Variables
@@ -118,9 +119,6 @@ jobs:
         SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
         DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
         echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
-        KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
-        KERNEL_VERSION=$(sed -n 2p include/kernel-$KERNEL | awk '{print $1}' | awk -F '-' '{print $2}')
-        echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
     - name: Download OpenWrt Firmware
       id: download
@@ -131,6 +129,7 @@ jobs:
         cd $FIRMWARE_PATH
         wget -q $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $RELEASE_TAG/ | awk -F '"' '{print $4}' | grep -v img.gz)
         echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
+        echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
 
     - name: Use Flippy Script Packaging
