@@ -328,35 +328,35 @@ for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); 
 done
 status "加载个人设置"
 
-# 开始下载openchash运行内核
-[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && {
+# 开始更新配置文件
+begin_time=$(date '+%H:%M:%S')
+[ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
+make defconfig 1>/dev/null 2>&1
+status "更新配置文件"
+
+# 开始下载openclash运行内核
+[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-openclash=y" .config && {
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
     $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
-    status "下载openchash运行内核"
-}
-
-# 开始下载zsh终端工具
-[[ $ZSH_TOOL = 'true' ]] && {
-    begin_time=$(date '+%H:%M:%S')
-    chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-    $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
-    status "下载zsh终端工具"
+    status "下载openclash运行内核"
 }
 
 # 开始下载adguardhome运行内核
-[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && {
+[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-adguardhome=y" .config && {
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh
     $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh $CLASH_KERNEL
     status "下载adguardhome运行内核"
 }
 
-# 开始更新配置文件
-begin_time=$(date '+%H:%M:%S')
-[ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
-make defconfig 1>/dev/null 2>&1
-status "更新配置文件"
+# 开始下载zsh终端工具
+[[ $ZSH_TOOL = 'true' ]] && grep -q "zsh=y" .config && {
+    begin_time=$(date '+%H:%M:%S')
+    chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
+    $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
+    status "下载zsh终端工具"
+}
 
 echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
 
