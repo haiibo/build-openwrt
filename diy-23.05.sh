@@ -18,12 +18,12 @@ fi
 
 color() {
     case $1 in
-        cr) echo -e "\e[1;31m$2\e[0m" ;;
-        cg) echo -e "\e[1;32m$2\e[0m" ;;
-        cy) echo -e "\e[1;33m$2\e[0m" ;;
-        cb) echo -e "\e[1;34m$2\e[0m" ;;
-        cp) echo -e "\e[1;35m$2\e[0m" ;;
-        cc) echo -e "\e[1;36m$2\e[0m" ;;
+        cr) echo -e "\e[1;31m$2\e[0m" ;;  # 红色
+        cg) echo -e "\e[1;32m$2\e[0m" ;;  # 绿色
+        cy) echo -e "\e[1;33m$2\e[0m" ;;  # 黄色
+        cb) echo -e "\e[1;34m$2\e[0m" ;;  # 蓝色
+        cp) echo -e "\e[1;35m$2\e[0m" ;;  # 紫色
+        cc) echo -e "\e[1;36m$2\e[0m" ;;  # 青色
     esac
 }
 
@@ -46,8 +46,6 @@ find_dir() {
 
 print_info() {
     printf "%s %-40s %s %s %s\n" $1 $2 $3 $4 $5
-    # read -r param1 param2 param3 param4 param5 <<< $1
-    # printf "%s %-40s %s %s %s\n" $param1 $param2 $param3 $param4 $param5
 }
 
 # 添加整个源仓库(git clone)
@@ -153,7 +151,7 @@ echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
 REPO_BRANCH="openwrt-23.05"
 echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
 
-# 开始拉取编译源码
+# 拉取编译源码
 begin_time=$(date '+%H:%M:%S')
 [[ $REPO_BRANCH != "master" ]] && BRANCH="-b $REPO_BRANCH --single-branch"
 cd /workdir
@@ -163,7 +161,7 @@ ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 [ -d openwrt ] && cd openwrt || exit
 echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 
-# 开始生成全局变量
+# 生成全局变量
 begin_time=$(date '+%H:%M:%S')
 [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
 make defconfig 1>/dev/null 2>&1
@@ -222,7 +220,7 @@ else
     echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
 fi
 
-# 开始更新&安装插件
+# 更新&安装插件
 begin_time=$(date '+%H:%M:%S')
 ./scripts/feeds update -a 1>/dev/null 2>&1
 ./scripts/feeds install -a 1>/dev/null 2>&1
@@ -270,7 +268,7 @@ sed -i "s|firmware_repo.*|firmware_repo 'https://github.com/$GITHUB_REPOSITORY'|
 # sed -i "s|kernel_path.*|kernel_path 'https://github.com/ophub/kernel'|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
 
-# 开始加载个人设置
+# 加载个人设置
 begin_time=$(date '+%H:%M:%S')
 
 [ -e $GITHUB_WORKSPACE/files ] && mv $GITHUB_WORKSPACE/files files
@@ -299,7 +297,7 @@ cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs
 # 添加编译日期
 echo "DISTRIB_DATE='R$(date +%y.%-m.%-d)'" >>package/base-files/files/etc/openwrt_release
 
-# 取消主题默认设置
+# 删除主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -print -exec sed -i '/set luci.main.mediaurlbase/d' {} \;
 
 # 调整 netdata 到 状态 菜单
@@ -328,13 +326,13 @@ for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); 
 done
 status "加载个人设置"
 
-# 开始更新配置文件
+# 更新配置文件
 begin_time=$(date '+%H:%M:%S')
 [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
 make defconfig 1>/dev/null 2>&1
 status "更新配置文件"
 
-# 开始下载openclash运行内核
+# 下载openclash运行内核
 [[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-openclash=y" .config && {
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
@@ -342,7 +340,7 @@ status "更新配置文件"
     status "下载openclash运行内核"
 }
 
-# 开始下载adguardhome运行内核
+# 下载adguardhome运行内核
 [[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-adguardhome=y" .config && {
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh
@@ -350,7 +348,7 @@ status "更新配置文件"
     status "下载adguardhome运行内核"
 }
 
-# 开始下载zsh终端工具
+# 下载zsh终端工具
 [[ $ZSH_TOOL = 'true' ]] && grep -q "zsh=y" .config && {
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
