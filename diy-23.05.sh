@@ -239,7 +239,7 @@ clone_all https://github.com/nikkinikki-org/OpenWrt-nikki
 clone_all https://github.com/nikkinikki-org/OpenWrt-momo
 clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
 
-clone_all https://github.com/sbwml/luci-app-alist
+clone_all https://github.com/sbwml/luci-app-openlist2
 clone_all https://github.com/sbwml/luci-app-mosdns
 git_clone https://github.com/sbwml/packages_lang_golang golang
 
