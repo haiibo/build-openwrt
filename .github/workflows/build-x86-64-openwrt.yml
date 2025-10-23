@@ -20,12 +20,12 @@ on:
       ip:
         description: '设置默认登录IP'
         required: false
-        default: '10.0.0.2'
+        default: '192.168.81.1'
 
       partsize:
         description: '设置rootfs大小'
         required: false
-        default: '800'
+        default: '991'
 
       toolchain:
         description: '使用toolchain缓存'
