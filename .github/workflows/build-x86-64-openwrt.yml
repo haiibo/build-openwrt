@@ -8,14 +8,14 @@ on:
         required: true
         default: '18.06'
         type: choice
-        options: [18.06, 23.05]
+        options: ['18.06', '24.10']
 
       target:
         description: '选择要编译的机型'
         required: true
         default: 'x86-64'
         type: choice
-        options: [x86-64]
+        options: ['x86-64']
 
       ip:
         description: '设置默认登录IP'

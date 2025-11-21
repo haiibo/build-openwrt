@@ -8,7 +8,7 @@ on:
         required: true
         default: '18.06'
         type: choice
-        options: [18.06, 23.05]
+        options: ['18.06', '24.10']
 
       script_repo:
         description: '选择打包脚本储存库'
@@ -83,9 +83,9 @@ jobs:
         if [[ ${{ github.event.inputs.source_repo }} == '18.06' ]]; then
           echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
           echo "REPO_BRANCH=master" >>$GITHUB_ENV
-        elif [[ ${{ github.event.inputs.source_repo }} == '23.05' ]]; then
+        elif [[ ${{ github.event.inputs.source_repo }} == '24.10' ]]; then
           echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
-          echo "REPO_BRANCH=openwrt-23.05" >>$GITHUB_ENV
+          echo "REPO_BRANCH=openwrt-24.10" >>$GITHUB_ENV
         fi
 
     - name: Initialization Environment
