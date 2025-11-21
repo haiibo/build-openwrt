@@ -239,7 +239,7 @@ color cy "添加&替换插件"
 git_clone https://github.com/kongfl888/luci-app-adguardhome
 clone_all lua https://github.com/sirpdboy/luci-app-ddns-go
 
-clone_all lua https://github.com/sbwml/luci-app-alist
+clone_dir lua https://github.com/sbwml/luci-app-alist luci-app-alist
 clone_all v5-lua https://github.com/sbwml/luci-app-mosdns
 git_clone https://github.com/sbwml/packages_lang_golang golang
 
