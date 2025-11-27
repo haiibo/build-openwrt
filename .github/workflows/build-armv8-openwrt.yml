@@ -176,10 +176,9 @@ jobs:
       if: steps.compile.conclusion == 'success'
       uses: haiibo/flippy-openwrt-actions@main
       env:
-        OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*rootfs.tar.gz
-        KERNEL_REPO_URL: ophub/kernel
-        KERNEL_USAGE: flippy
+        OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
         PACKAGE_SOC: s905d_s905x3
+        KERNEL_REPO_URL: ophub/kernel
         KERNEL_VERSION_NAME: 6.1.y_6.6.y
         KERNEL_AUTO_LATEST: true
 
