@@ -11,10 +11,4 @@ uci commit luci
 # uci set fstab.@global[0].check_fs=1
 # uci commit fstab
 
-# Set etc/openwrt_release
-repo=$(cat /etc/openwrt_release | grep DISTRIB_DESCRIPTION= | awk -F "'" '{print $2}' | awk '{print $1}')
-date=$(cat /etc/openwrt_release | grep DISTRIB_DATE= | awk -F "'" '{print $2}')
-sed -i "s/DISTRIB_DESCRIPTION=.*/DISTRIB_DESCRIPTION='$repo $date'/g" /etc/openwrt_release
-sed -i "s/DISTRIB_REVISION=.*/DISTRIB_REVISION=''/g; /DISTRIB_DATE/d" /etc/openwrt_release
-
 exit 0

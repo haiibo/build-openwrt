@@ -294,18 +294,8 @@ sed -i 's/root:::0:99999:7:::/root:$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.::0:99999:7
 # 更改 Argon 主题背景
 cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/bg1.jpg
 
-# 添加编译日期
-echo "DISTRIB_DATE='R$(date +%y.%-m.%-d)'" >>package/base-files/files/etc/openwrt_release
-
 # 删除主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -print -exec sed -i '/set luci.main.mediaurlbase/d' {} \;
-
-# 调整 netdata 到 状态 菜单
-# sed -i 's/system/status/g' feeds/luci/applications/luci-app-netdata/luasrc/controller/netdata.lua
-
-# 更改 ttyd 顺序和名称
-sed -i '3a \		"order": 10,' feeds/luci/applications/luci-app-ttyd/root/usr/share/luci/menu.d/luci-app-ttyd.json
-sed -i 's/\"终端\"/\"TTYD 终端\"/g' feeds/luci/applications/luci-app-ttyd/po/zh_Hans/ttyd.po
 
 # 设置 nlbwmon 独立菜单
 sed -i 's/services\/nlbw/nlbw/g; /path/s/admin\///g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json
@@ -338,14 +328,6 @@ status "更新配置文件"
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
     $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
     status "下载openclash运行内核"
-}
-
-# 下载adguardhome运行内核
-[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-adguardhome=y" .config && {
-    begin_time=$(date '+%H:%M:%S')
-    chmod +x $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh
-    $GITHUB_WORKSPACE/scripts/preset-adguard-core.sh $CLASH_KERNEL
-    status "下载adguardhome运行内核"
 }
 
 # 下载zsh终端工具
