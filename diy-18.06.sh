@@ -307,7 +307,7 @@ ORIG_VERSION=$(cat "package/lean/default-settings/files/zzz-default-settings" | 
 sed -i "s/$ORIG_VERSION/R$(date +%y.%-m.%-d)/g" package/lean/default-settings/files/zzz-default-settings
 
 # 删除主题默认设置
-# find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -print -exec sed -i '/set luci.main.mediaurlbase/d' {} \;
+# find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -exec sed -i '/set luci.main.mediaurlbase/d' {} +
 
 # 调整 Docker 到 服务 菜单
 # sed -i 's/"admin"/"admin", "services"/g' feeds/luci/applications/luci-app-dockerman/luasrc/controller/*.lua
@@ -323,9 +323,9 @@ sed -i "s/$ORIG_VERSION/R$(date +%y.%-m.%-d)/g" package/lean/default-settings/fi
 # sed -i '/samba4/s/^/#/' package/lean/default-settings/files/zzz-default-settings
 
 # 修复 Makefile 路径
-find $destination_dir/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i \
-    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?' \
-    -e 's?include \.\./\.\./\(lang\|devel\)?include $(TOPDIR)/feeds/packages/\1?' {}
+find $destination_dir -type f -name "Makefile" | xargs sed -i \
+    -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
+    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
 
 # 转换插件语言翻译
 for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
