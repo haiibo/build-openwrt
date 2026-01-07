@@ -1,0 +1,66 @@
+name: auto trigger workflows
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["delete old workflows"]
+    types:
+      - completed
+
+jobs:
+  build:
+    name: build ${{matrix.target}} ${{matrix.source}}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [immwrt, lean]
+        target: [x86-64]
+
+    uses: ./.github/workflows/build-x86-64-openwrt.yml
+    with:
+      source: ${{matrix.source}}
+      target: ${{matrix.target}}
+      ip_address: 10.0.0.2
+      partsize: 800
+      openclash: amd64
+      toolchain: true
+      artifact: false
+      release: true
+#///////////////////////////////////////////////////////
+  build2:
+    name: build armv8 ${{matrix.source}}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [immwrt, lean]
+
+    uses: ./.github/workflows/build-armv8-openwrt.yml
+    with:
+      source: ${{matrix.source}}
+      ip_address: 10.0.0.2
+      openwrt_board: s905d_s905x3
+      openwrt_kernel: 6.6.y_6.12.y
+      kernel_repo: ophub/kernel
+      openclash: arm64
+      toolchain: true
+      artifact: false
+      release: true
+#///////////////////////////////////////////////////////
+  build3:
+    name: build ${{matrix.target}} ${{matrix.wifi}}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ipq60xx]
+        wifi: [wifi-yes, wifi-no]
+
+    uses: ./.github/workflows/build-ipq60xx-openwrt.yml
+    with:
+      source: immwrt
+      target: ${{matrix.target}}
+      ip_address: 10.0.0.1
+      wifi: ${{matrix.wifi}}
+      openclash: arm64
+      toolchain: true
+      artifact: false
+      release: true

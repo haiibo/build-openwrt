@@ -1,4 +1,4 @@
-name: build x86/64 openwrt
+name: build ipq60xx openwrt
 
 on:
   workflow_call:
@@ -12,7 +12,7 @@ on:
       ip_address:
         required: true
         type: string
-      partsize:
+      wifi:
         required: true
         type: string
       toolchain:
@@ -35,29 +35,31 @@ on:
         required: true
         default: 'immwrt'
         type: choice
-        options: ['immwrt', 'lean']
+        options: ['immwrt']
 
       target:
         description: '选择要编译的机型'
         required: true
-        default: 'x86-64'
+        default: 'ipq60xx'
         type: choice
-        options: ['x86-64']
+        options: ['ipq60xx']
 
       ip_address:
         description: '设置默认IP地址'
         required: false
-        default: '10.0.0.2'
+        default: '10.0.0.1'
 
-      partsize:
-        description: '设置rootfs大小'
+      wifi:
+        description: '选择是否编译WIFI'
         required: false
-        default: '800'
+        default: 'wifi-yes'
+        type: choice
+        options: ['wifi-yes', 'wifi-no']
 
       openclash:
         description: '预设openclash内核'
         required: false
-        default: 'amd64'
+        default: 'arm64'
         type: choice
         options: [false, amd64, arm64, armv7, armv6, armv5, 386]
 
@@ -81,17 +83,16 @@ on:
 
 jobs:
   build:
-    name: build ${{inputs.target}} ${{inputs.source}}
+    name: build ${{inputs.target}} ${{inputs.wifi}}
     runs-on: ubuntu-24.04
 
     env:
       IP_ADDRESS: ${{inputs.ip_address}}
-      PART_SIZE: ${{inputs.partsize}}
       CLASH_KERNEL: ${{inputs.openclash}}
       TOOLCHAIN: ${{inputs.toolchain}}
-      CONFIG_FILE: configs/${{inputs.target}}-${{inputs.source}}.config
+      CONFIG_FILE: configs/${{inputs.target}}-${{inputs.wifi}}.config
       DIY_SCRIPT: ${{inputs.source}}.sh
-      RELEASE_TAG: ${{inputs.target}}-${{inputs.source}}
+      RELEASE_TAG: ${{inputs.target}}-${{inputs.wifi}}
       UPLOAD_BIN_DIR: false
       UPLOAD_ARTIFACT: ${{inputs.artifact}}
       UPLOAD_RELEASE: ${{inputs.release}}
@@ -151,7 +152,10 @@ jobs:
           sudo chown -R runner:runner /workdir && df -hT
 
       - name: Load Compile Script
-        run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
+        run: |
+          sed -i 's/immortalwrt\/immortalwrt/VIKINGYFY\/immortalwrt/' $DIY_SCRIPT
+          sed -i 's/REPO_BRANCH=".*"/REPO_BRANCH="main"/' $DIY_SCRIPT
+          chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
       - name: Compile Toolchain
         if: env.REBUILD_TOOLCHAIN == 'true'
@@ -217,7 +221,7 @@ jobs:
           cat config.buildinfo
           cp -rf $OPENWRT_PATH/bin/packages/* packages
           tar -zcf packages.tar.gz packages
-          sleep 3s && rm -rf packages sha256sums *.buildinfo *.bin *.json *rootfs.img.gz
+          sleep 3s && rm -rf packages sha256sums *.buildinfo *.json *rootfs.img.gz
           echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
 
       - name: Upload Firmware To Artifact
@@ -238,7 +242,7 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
           artifacts: ${{env.FIRMWARE_PATH}}/*
           body: |
-            **This is ${{env.SOURCE_REPO}} firmware for ${{env.DEVICE_TARGET}}**
+            **This is ${{env.SOURCE_REPO}} firmware for ${{env.DEVICE_TARGET}}-${{inputs.wifi}}**
             ### 📒 固件信息
             - 💻 平台架构: ${{env.DEVICE_TARGET}}
             - ⚽ 固件源码: ${{env.REPO_URL}}

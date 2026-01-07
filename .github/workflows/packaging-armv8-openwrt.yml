@@ -64,13 +64,13 @@ on:
 
 jobs:
   packaging:
-    name: packaging armv8 ${{ inputs.source_repo }}
+    name: packaging armv8 ${{inputs.source_repo}}
     runs-on: ubuntu-24.04
 
     env:
-      IP_ADDRESS: ${{ inputs.ip_address }}
-      CONFIG_FILE: configs/armv8-${{ inputs.source_repo }}.config
-      RELEASE_TAG: armv8-${{ inputs.source_repo }}
+      IP_ADDRESS: ${{inputs.ip_address}}
+      CONFIG_FILE: configs/armv8-${{inputs.source_repo}}.config
+      RELEASE_TAG: armv8-${{inputs.source_repo}}
       TZ: Asia/Shanghai
 
     steps:
@@ -79,10 +79,10 @@ jobs:
 
       - name: Set Compile Source Code
         run: |
-          if [[ ${{ inputs.source_repo }} == 'lean' ]]; then
+          if [[ ${{inputs.source_repo}} == 'lean' ]]; then
             echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
             echo "REPO_BRANCH=master" >>$GITHUB_ENV
-          elif [[ ${{ inputs.source_repo }} == 'immwrt' ]]; then
+          elif [[ ${{inputs.source_repo}} == 'immwrt' ]]; then
             echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
             echo "REPO_BRANCH=openwrt-24.10" >>$GITHUB_ENV
           fi
@@ -138,12 +138,12 @@ jobs:
         uses: haiibo/flippy-openwrt-actions@main
         env:
           OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
-          PACKAGE_SOC: ${{ inputs.openwrt_board }}
-          KERNEL_REPO_URL: ${{ inputs.kernel_repo }}
-          KERNEL_VERSION_NAME: ${{ inputs.openwrt_kernel }}
-          KERNEL_AUTO_LATEST: ${{ inputs.auto_kernel }}
-          OPENWRT_IP: ${{ inputs.ip_address }}
-          CUSTOMIZE_RK3399: ${{ inputs.customize_rk3399 }}
+          PACKAGE_SOC: ${{inputs.openwrt_board}}
+          KERNEL_REPO_URL: ${{inputs.kernel_repo}}
+          KERNEL_VERSION_NAME: ${{inputs.openwrt_kernel}}
+          KERNEL_AUTO_LATEST: ${{inputs.auto_kernel}}
+          OPENWRT_IP: ${{inputs.ip_address}}
+          CUSTOMIZE_RK3399: ${{inputs.customize_rk3399}}
           WHOAMI: flippy
 
       - name: Use Ophub Script Packaging
@@ -151,11 +151,11 @@ jobs:
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
-          openwrt_ip: ${{ inputs.ip_address }}
-          openwrt_board: ${{ inputs.openwrt_board }}
-          openwrt_kernel: ${{ inputs.openwrt_kernel }}
-          auto_kernel: ${{ inputs.auto_kernel }}
-          kernel_repo: ${{ inputs.kernel_repo }}
+          openwrt_ip: ${{inputs.ip_address}}
+          openwrt_board: ${{inputs.openwrt_board}}
+          openwrt_kernel: ${{inputs.openwrt_kernel}}
+          auto_kernel: ${{inputs.auto_kernel}}
+          kernel_repo: ${{inputs.kernel_repo}}
           builder_name: flippy
 
       - name: Organize Files
@@ -164,24 +164,24 @@ jobs:
           cd $PACKAGED_OUTPUTPATH
           rm -f *rootfs.tar.gz *.sha
           if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
-            rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
+            rename 's/openwrt/${{env.SOURCE_REPO}}/' *
           fi
 
       - name: Upload Firmware To Artifact
         if: env.PACKAGED_STATUS == 'success' && github.event.inputs.upload_artifact == 'true'
         uses: actions/upload-artifact@main
         with:
-          name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
-          path: ${{ env.PACKAGED_OUTPUTPATH }}
+          name: ${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}-firmware-${{env.FILE_DATE}}
+          path: ${{env.PACKAGED_OUTPUTPATH}}
 
       - name: Upload Firmware To Release
         if: env.PACKAGED_STATUS == 'success' && github.event.inputs.upload_release == 'true'
         uses: ncipollo/release-action@main
         with:
-          name: ${{ env.RELEASE_TAG }}-${{ env.DATE }}
+          name: ${{env.RELEASE_TAG}}-${{env.DATE}}
           allowUpdates: true
           removeArtifacts: true
-          tag: ${{ env.RELEASE_TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
+          tag: ${{env.RELEASE_TAG}}
+          token: ${{secrets.GITHUB_TOKEN}}
+          artifacts: ${{env.FIRMWARE_PATH}}/*,${{env.PACKAGED_OUTPUTPATH}}/*
           bodyFile: release.txt

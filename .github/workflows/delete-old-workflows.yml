@@ -1,6 +1,9 @@
 name: delete old workflows
 
 on:
+  schedule:
+    - cron: 0 0 * * 6
+
   workflow_dispatch:
     inputs:
       releases_keep_latest:
@@ -27,9 +30,9 @@ jobs:
         with:
           delete_releases: true
           delete_tags: true
-          releases_keep_latest: ${{ inputs.releases_keep_latest }}
+          releases_keep_latest: ${{inputs.releases_keep_latest || '10'}}
           releases_keep_keyword: 'toolchain'
           delete_workflows: true
-          workflows_keep_day: ${{ inputs.workflows_keep_day }}
+          workflows_keep_day: ${{inputs.workflows_keep_day || '30'}}
           out_log: true
-          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          gh_token: ${{secrets.GITHUB_TOKEN}}

@@ -1,6 +1,36 @@
 name: build armv8 openwrt
 
 on:
+  workflow_call:
+    inputs:
+      source:
+        required: true
+        type: string
+      ip_address:
+        required: true
+        type: string
+      openwrt_board:
+        required: true
+        type: string
+      openwrt_kernel:
+        required: true
+        type: string
+      kernel_repo:
+        required: true
+        type: string
+      openclash:
+        required: true
+        type: string
+      toolchain:
+        required: true
+        type: string
+      artifact:
+        required: true
+        type: string
+      release:
+        required: true
+        type: string
+
   workflow_dispatch:
     inputs:
       source:
@@ -59,17 +89,19 @@ on:
 
 jobs:
   build:
-    name: build armv8 ${{ inputs.source }}
+    name: build armv8 ${{inputs.source}}
     runs-on: ubuntu-24.04
 
     env:
-      IP_ADDRESS: ${{ inputs.ip_address }}
-      CLASH_KERNEL: ${{ inputs.openclash }}
-      TOOLCHAIN: ${{ inputs.toolchain }}
-      CONFIG_FILE: configs/armv8-${{ inputs.source }}.config
-      DIY_SCRIPT: ${{ inputs.source }}.sh
-      RELEASE_TAG: armv8-${{ inputs.source }}
+      IP_ADDRESS: ${{inputs.ip_address}}
+      CLASH_KERNEL: ${{inputs.openclash}}
+      TOOLCHAIN: ${{inputs.toolchain}}
+      CONFIG_FILE: configs/armv8-${{inputs.source}}.config
+      DIY_SCRIPT: ${{inputs.source}}.sh
+      RELEASE_TAG: armv8-${{inputs.source}}
       UPLOAD_BIN_DIR: false
+      UPLOAD_ARTIFACT: ${{inputs.artifact}}
+      UPLOAD_RELEASE: ${{inputs.release}}
       TZ: Asia/Shanghai
 
     steps:
@@ -140,9 +172,9 @@ jobs:
         if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
         uses: mknejp/delete-release-assets@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{secrets.GITHUB_TOKEN}}
           tag: toolchain
-          assets: '${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}*'
+          assets: '${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}*'
           fail-if-no-assets: false
           fail-if-no-release: false
 
@@ -152,7 +184,7 @@ jobs:
         with:
           name: toolchain-cache
           tag_name: toolchain
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{secrets.GITHUB_TOKEN}}
           files: output/*
           body: OpenWrt 工具链缓存
 
@@ -177,17 +209,17 @@ jobs:
         if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
         uses: actions/upload-artifact@main
         with:
-          name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-bin-${{ env.FILE_DATE }}
-          path: ${{ env.OPENWRT_PATH }}/bin
+          name: ${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}-bin-${{env.FILE_DATE}}
+          path: ${{env.OPENWRT_PATH}}/bin
 
       - name: Packaging OpenWrt
         if: steps.compile.conclusion == 'success'
         uses: haiibo/flippy-openwrt-actions@main
         env:
           OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
-          PACKAGE_SOC: ${{ inputs.openwrt_board }}
-          KERNEL_REPO_URL: ${{ inputs.kernel_repo }}
-          KERNEL_VERSION_NAME: ${{ inputs.openwrt_kernel }}
+          PACKAGE_SOC: ${{inputs.openwrt_board}}
+          KERNEL_REPO_URL: ${{inputs.kernel_repo}}
+          KERNEL_VERSION_NAME: ${{inputs.openwrt_kernel}}
           KERNEL_AUTO_LATEST: true
 
       - name: Organize Files
@@ -206,38 +238,38 @@ jobs:
           echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
           cd $PACKAGED_OUTPUTPATH && rm -f *rootfs.tar.gz *.sha
           if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
-            rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
+            rename 's/openwrt/${{env.SOURCE_REPO}}/' *
           fi
 
       - name: Upload Firmware To Artifact
-        if: env.PACKAGED_STATUS == 'success' && github.event.inputs.artifact == 'true'
+        if: env.PACKAGED_STATUS == 'success' && env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@main
         with:
-          name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
-          path: ${{ env.PACKAGED_OUTPUTPATH }}
+          name: ${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}-firmware-${{env.FILE_DATE}}
+          path: ${{env.PACKAGED_OUTPUTPATH}}
 
       - name: Upload Firmware To Release
-        if: env.PACKAGED_STATUS == 'success' && github.event.inputs.release == 'true'
+        if: env.PACKAGED_STATUS == 'success' && env.UPLOAD_RELEASE == 'true'
         uses: ncipollo/release-action@main
         with:
-          name: ${{ env.RELEASE_TAG }}-${{ env.DATE }}
+          name: ${{env.RELEASE_TAG}}-${{env.DATE}}
           allowUpdates: true
           removeArtifacts: true
-          tag: ${{ env.RELEASE_TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
+          tag: ${{env.RELEASE_TAG}}
+          token: ${{secrets.GITHUB_TOKEN}}
+          artifacts: ${{env.FIRMWARE_PATH}}/*,${{env.PACKAGED_OUTPUTPATH}}/*
           body: |
-            **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
+            **This is ${{env.SOURCE_REPO}} firmware for ${{env.DEVICE_TARGET}}**
             ### 📒 固件信息
-            - 💻 平台架构: ${{ env.DEVICE_TARGET }}
-            - ⚽ 固件源码: ${{ env.REPO_URL }}
-            - 💝 源码分支: ${{ env.REPO_BRANCH }}
-            - 🚀 内核版本: ${{ env.KERNEL_VERSION }}
-            - 🌐 默认地址: ${{ env.IP_ADDRESS }}
+            - 💻 平台架构: ${{env.DEVICE_TARGET}}
+            - ⚽ 固件源码: ${{env.REPO_URL}}
+            - 💝 源码分支: ${{env.REPO_BRANCH}}
+            - 🚀 内核版本: ${{env.KERNEL_VERSION}}
+            - 🌐 默认地址: ${{env.IP_ADDRESS}}
             - 🔑 默认密码: password
             ### 🧊 固件版本
-            - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
-            - ${{ env.COMMIT_AUTHOR }}
-            - ${{ env.COMMIT_DATE }}
-            - ${{ env.COMMIT_MESSAGE }}
-            - ${{ env.COMMIT_HASH }}
+            - 固件编译前最后一次➦[主源码](${{env.REPO_URL}})更新记录
+            - ${{env.COMMIT_AUTHOR}}
+            - ${{env.COMMIT_DATE}}
+            - ${{env.COMMIT_MESSAGE}}
+            - ${{env.COMMIT_HASH}}

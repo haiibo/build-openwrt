@@ -309,6 +309,18 @@ find $destination_dir -type f -name "Makefile" | xargs sed -i \
     -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
     -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
 
+# 修改qca-nss-drv启动顺序
+drv_path="feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
+if [ -f "$drv_path" ]; then
+    sed -i 's/START=.*/START=85/g' $drv_path
+fi
+
+# 修改qca-nss-pbuf启动顺序
+pbuf_path="package/kernel/mac80211/files/qca-nss-pbuf.init"
+if [ -f "$pbuf_path" ]; then
+    sed -i 's/START=.*/START=86/g' $pbuf_path
+fi
+
 # 移除attendedsysupgrade
 find "feeds/luci/collections" -name "Makefile" | while read -r makefile; do
     if grep -q "luci-app-attendedsysupgrade" "$makefile"; then
