@@ -4,28 +4,33 @@ on:
   workflow_dispatch:
     inputs:
       source:
-        description: '选择要编译的LUCI版本'
+        description: '选择要编译的源码'
         required: true
-        default: '18.06'
+        default: 'immwrt'
         type: choice
-        options: ['18.06', '24.10']
+        options: ['immwrt', 'lean']
 
-      ip:
-        description: '设置默认登录IP'
+      ip_address:
+        description: '设置默认IP地址'
         required: false
         default: '10.0.0.2'
 
-      toolchain:
-        description: '使用toolchain缓存'
-        required: false
-        default: true
-        type: boolean
+      openwrt_board:
+        description: '选择设备(CPU)型号'
+        required: true
+        default: 's905d_s905x3'
 
-      zsh_tool:
-        description: '预设zsh终端工具'
+      openwrt_kernel:
+        description: '设置内核版本'
+        required: true
+        default: '6.6.y_6.12.y'
+
+      kernel_repo:
+        description: '选择内核存储库'
         required: false
-        default: true
-        type: boolean
+        default: 'ophub/kernel'
+        type: choice
+        options: [ophub/kernel, breakingbadboy/OpenWrt]
 
       openclash:
         description: '预设openclash内核'
@@ -33,6 +38,12 @@ on:
         default: 'arm64'
         type: choice
         options: [false, amd64, arm64, armv7, armv6, armv5, 386]
+
+      toolchain:
+        description: '使用toolchain缓存'
+        required: false
+        default: true
+        type: boolean
 
       artifact:
         description: '上传固件到Artifact'
@@ -48,188 +59,185 @@ on:
 
 jobs:
   build:
+    name: build armv8 ${{ inputs.source }}
     runs-on: ubuntu-24.04
-    name: build armv8 ${{ github.event.inputs.source }}
 
     env:
-      DEFAULT_IP: ${{ github.event.inputs.ip }}
-      TOOLCHAIN: ${{ github.event.inputs.toolchain }}
-      ZSH_TOOL: ${{ github.event.inputs.zsh_tool }}
-      CLASH_KERNEL: ${{ github.event.inputs.openclash }}
-      CONFIG_FILE: configs/armv8-${{ github.event.inputs.source }}.config
-      DIY_SCRIPT: diy-${{ github.event.inputs.source }}.sh
-      RELEASE_TAG: armv8-${{ github.event.inputs.source }}
-      TOOLCHAIN_TAG: toolchain
+      IP_ADDRESS: ${{ inputs.ip_address }}
+      CLASH_KERNEL: ${{ inputs.openclash }}
+      TOOLCHAIN: ${{ inputs.toolchain }}
+      CONFIG_FILE: configs/armv8-${{ inputs.source }}.config
+      DIY_SCRIPT: ${{ inputs.source }}.sh
+      RELEASE_TAG: armv8-${{ inputs.source }}
       UPLOAD_BIN_DIR: false
       TZ: Asia/Shanghai
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@main
+      - name: Checkout
+        uses: actions/checkout@main
 
-    - name: Check Server Performance
-      run: |
-        echo "警告⚠"
-        echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
-        echo -e "已知CPU型号(降序): 7763，8370C，8272CL，8171M，E5-2673\n"
-        echo "==========================CPU信息=========================="
-        echo "CPU物理数量: $(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
-        echo "CPU线程数量: $(nproc)"
-        echo -e "CPU型号信息:$(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')\n"
-        echo "==========================内存信息=========================="
-        echo "已安装内存详细信息:"
-        echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
-        echo "==========================硬盘信息=========================="
-        echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
+      - name: Check Server Performance
+        run: |
+          echo "警告⚠"
+          echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
+          echo -e "已知CPU型号(降序): 7763，8370C，8272CL，8171M，E5-2673\n"
+          echo "==========================CPU信息=========================="
+          echo "CPU物理数量: $(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
+          echo "CPU线程数量: $(nproc)"
+          echo -e "CPU型号信息:$(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')\n"
+          echo "==========================内存信息=========================="
+          echo "已安装内存详细信息:"
+          echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
+          echo "==========================硬盘信息=========================="
+          echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
 
-    - name: Initialization Environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        docker rmi -f $(docker images -q) 2>/dev/null || true
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android $AGENT_TOOLSDIRECTORY
-        sudo swapoff -a && sudo rm -f /swapfile /mnt/swapfile
-        sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-        sudo -E apt-get -y update
-        sudo -E apt-get -y install rename $(curl -fsSL is.gd/depends_ubuntu_2404)
-        sudo -E systemctl daemon-reload
-        sudo -E apt-get -y autoremove --purge
-        sudo -E apt-get -y clean
-        sudo timedatectl set-timezone "$TZ"
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          docker rmi -f $(docker images -q) 2>/dev/null || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android $AGENT_TOOLSDIRECTORY
+          sudo swapoff -a && sudo rm -f /swapfile /mnt/swapfile
+          sudo -E apt -yqq purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+          sudo -E apt -yqq update
+          sudo -E apt -yqq install rename $(curl -fsSL is.gd/depends_ubuntu_2404)
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E systemctl daemon-reload
+          sudo timedatectl set-timezone "$TZ"
 
-    - name: Combine Disks
-      run: |
-        MNT_SIZE=$((($(df --block-size=1024 --output=avail /mnt | tail -1) - 1024*1024*1) * 1024))
-        sudo fallocate -l $MNT_SIZE /mnt/mnt.img
-        MNT_NAME=$(sudo losetup -Pf --show /mnt/mnt.img)
-        sudo pvcreate -f $MNT_NAME
-        ROOT_SIZE=$((($(df --block-size=1024 --output=avail / | tail -1) - 1024*1024*4) * 1024))
-        sudo fallocate -l $ROOT_SIZE /root.img
-        ROOT_NAME=$(sudo losetup -Pf --show /root.img)
-        sudo pvcreate -f $ROOT_NAME
-        sudo vgcreate actions $MNT_NAME $ROOT_NAME
-        sudo lvcreate -n disk -l 100%FREE actions
-        LV_NAME=$(sudo lvscan | awk -F "'" '{print $2}')
-        sudo mkfs.btrfs -L combinedisk $LV_NAME
-        sudo mkdir -p /workdir
-        sudo mount -o compress=zstd $LV_NAME /workdir
-        sudo chown -R runner:runner /workdir && df -hT
+      - name: Combine Disks
+        run: |
+          MNT_SIZE=$((($(df --block-size=1024 --output=avail /mnt | tail -1) - 1024*1024*1) * 1024))
+          sudo fallocate -l $MNT_SIZE /mnt/mnt.img
+          MNT_NAME=$(sudo losetup -Pf --show /mnt/mnt.img)
+          sudo pvcreate -f $MNT_NAME
+          ROOT_SIZE=$((($(df --block-size=1024 --output=avail / | tail -1) - 1024*1024*4) * 1024))
+          sudo fallocate -l $ROOT_SIZE /root.img
+          ROOT_NAME=$(sudo losetup -Pf --show /root.img)
+          sudo pvcreate -f $ROOT_NAME
+          sudo vgcreate actions $MNT_NAME $ROOT_NAME
+          sudo lvcreate -n disk -l 100%FREE actions
+          LV_NAME=$(sudo lvscan | awk -F "'" '{print $2}')
+          sudo mkfs.btrfs -L combinedisk $LV_NAME
+          sudo mkdir -p /workdir
+          sudo mount -o compress=zstd $LV_NAME /workdir
+          sudo chown -R runner:runner /workdir && df -hT
 
-    - name: Load Compile Script
-      run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
+      - name: Load Compile Script
+        run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
-    - name: Compile Toolchain
-      if: env.REBUILD_TOOLCHAIN == 'true'
-      id: toolchain
-      run: |
-        cd $OPENWRT_PATH
-        make toolchain/compile -j$(nproc) || make toolchain/compile -j1 V=s
-        $GITHUB_WORKSPACE/$DIY_SCRIPT
+      - name: Compile Toolchain
+        if: env.REBUILD_TOOLCHAIN == 'true'
+        id: toolchain
+        run: |
+          cd $OPENWRT_PATH
+          make toolchain/compile -j$(nproc) || make toolchain/compile -j1 V=s
+          $GITHUB_WORKSPACE/$DIY_SCRIPT
 
-    - name: Delete Old Toolchain
-      if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
-      uses: mknejp/delete-release-assets@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        tag: ${{ env.TOOLCHAIN_TAG }}
-        assets: '${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}*'
-        fail-if-no-assets: false
-        fail-if-no-release: false
+      - name: Delete Old Toolchain
+        if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: toolchain
+          assets: '${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}*'
+          fail-if-no-assets: false
+          fail-if-no-release: false
 
-    - name: Upload Toolchain To Release
-      if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        name: toolchain-cache
-        tag_name: ${{ env.TOOLCHAIN_TAG }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        files: output/*
-        body: OpenWrt 工具链缓存
+      - name: Upload Toolchain To Release
+        if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: toolchain-cache
+          tag_name: toolchain
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: output/*
+          body: OpenWrt 工具链缓存
 
-    - name: Download DL Package
-      run: |
-        cd $OPENWRT_PATH
-        # make download -j$(nproc)
-        make package/download -j$(nproc)
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+      - name: Download DL Package
+        run: |
+          cd $OPENWRT_PATH
+          # make download -j$(nproc)
+          make package/download -j$(nproc)
 
-    - name: Compile Firmware
-      id: compile
-      run: |
-        cd $OPENWRT_PATH
-        mkdir -p files/etc/uci-defaults
-        cp $GITHUB_WORKSPACE/scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 V=s
-        echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
-        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
+      - name: Compile Firmware
+        id: compile
+        run: |
+          cd $OPENWRT_PATH
+          mkdir -p files/etc/uci-defaults
+          cp $GITHUB_WORKSPACE/scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
+          echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
+          echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >>$GITHUB_ENV
 
-    - name: Upload Bin Directory
-      if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-bin-${{ env.FILE_DATE }}
-        path: ${{ env.OPENWRT_PATH }}/bin
+      - name: Upload Bin Directory
+        if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
+        uses: actions/upload-artifact@main
+        with:
+          name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-bin-${{ env.FILE_DATE }}
+          path: ${{ env.OPENWRT_PATH }}/bin
 
-    - name: Packaging OpenWrt
-      if: steps.compile.conclusion == 'success'
-      uses: haiibo/flippy-openwrt-actions@main
-      env:
-        OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
-        PACKAGE_SOC: s905d_s905x3
-        KERNEL_REPO_URL: ophub/kernel
-        KERNEL_VERSION_NAME: 6.1.y_6.6.y
-        KERNEL_AUTO_LATEST: true
+      - name: Packaging OpenWrt
+        if: steps.compile.conclusion == 'success'
+        uses: haiibo/flippy-openwrt-actions@main
+        env:
+          OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
+          PACKAGE_SOC: ${{ inputs.openwrt_board }}
+          KERNEL_REPO_URL: ${{ inputs.kernel_repo }}
+          KERNEL_VERSION_NAME: ${{ inputs.openwrt_kernel }}
+          KERNEL_AUTO_LATEST: true
 
-    - name: Organize Files
-      if: env.PACKAGED_STATUS == 'success'
-      run: |
-        df -hT
-        echo "==============================="
-        ls $OPENWRT_PATH/bin/targets/*/*
-        echo "==============================="
-        cd $OPENWRT_PATH/bin/targets/*/*
-        cat config.buildinfo
-        cp -rf $OPENWRT_PATH/bin/packages/* packages
-        tar -zcf packages.tar.gz packages
-        sleep 3s && rm -rf packages u-boot-qemu* sha256sums *.buildinfo *.manifest *.bin
-        sed '/^$/d' $OPENWRT_PATH/.config >config.txt
-        echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
-        cd $PACKAGED_OUTPUTPATH && rm -f *rootfs.tar.gz *.sha
-        if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
-          rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
-        fi
+      - name: Organize Files
+        if: env.PACKAGED_STATUS == 'success'
+        run: |
+          df -hT
+          echo "==============================="
+          ls $OPENWRT_PATH/bin/targets/*/*
+          echo "==============================="
+          cd $OPENWRT_PATH/bin/targets/*/*
+          sed '/^$/d' $OPENWRT_PATH/.config >config.txt
+          cat config.buildinfo
+          cp -rf $OPENWRT_PATH/bin/packages/* packages
+          tar -zcf packages.tar.gz packages
+          sleep 3s && rm -rf packages u-boot-qemu* sha256sums *.buildinfo *.bin
+          echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
+          cd $PACKAGED_OUTPUTPATH && rm -f *rootfs.tar.gz *.sha
+          if [[ $SOURCE_REPO == 'immortalwrt' ]]; then
+            rename 's/openwrt/${{ env.SOURCE_REPO }}/' *
+          fi
 
-    - name: Upload OpenWrt To Artifact
-      if: env.PACKAGED_STATUS == 'success' && github.event.inputs.artifact == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
-        path: ${{ env.PACKAGED_OUTPUTPATH }}
+      - name: Upload Firmware To Artifact
+        if: env.PACKAGED_STATUS == 'success' && github.event.inputs.artifact == 'true'
+        uses: actions/upload-artifact@main
+        with:
+          name: ${{ env.SOURCE_REPO }}-${{ env.LITE_BRANCH }}-${{ env.DEVICE_TARGET }}-firmware-${{ env.FILE_DATE }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
 
-    - name: Upload OpenWrt To Release
-      if: env.PACKAGED_STATUS == 'success' && github.event.inputs.release == 'true'
-      uses: ncipollo/release-action@main
-      with:
-        name: ${{ env.DATE }} for ${{ env.DEVICE_TARGET }}
-        allowUpdates: true
-        removeArtifacts: true
-        tag: ${{ env.RELEASE_TAG }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
-        body: |
-          **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
-          ### 📒 固件信息
-          - 💻 平台架构: ${{ env.DEVICE_TARGET }}
-          - ⚽ 固件源码: ${{ env.REPO_URL }}
-          - 💝 源码分支: ${{ env.REPO_BRANCH }}
-          - 🚀 内核版本: ${{ env.KERNEL_VERSION }}
-          - 🌐 默认地址: ${{ env.DEFAULT_IP }}
-          - 🔑 默认密码: password
-          ### 🧊 固件版本
-          - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
-          - ${{ env.COMMIT_AUTHOR }}
-          - ${{ env.COMMIT_DATE }}
-          - ${{ env.COMMIT_MESSAGE }}
-          - ${{ env.COMMIT_HASH }}
+      - name: Upload Firmware To Release
+        if: env.PACKAGED_STATUS == 'success' && github.event.inputs.release == 'true'
+        uses: ncipollo/release-action@main
+        with:
+          name: ${{ env.RELEASE_TAG }}-${{ env.DATE }}
+          allowUpdates: true
+          removeArtifacts: true
+          tag: ${{ env.RELEASE_TAG }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
+          body: |
+            **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
+            ### 📒 固件信息
+            - 💻 平台架构: ${{ env.DEVICE_TARGET }}
+            - ⚽ 固件源码: ${{ env.REPO_URL }}
+            - 💝 源码分支: ${{ env.REPO_BRANCH }}
+            - 🚀 内核版本: ${{ env.KERNEL_VERSION }}
+            - 🌐 默认地址: ${{ env.IP_ADDRESS }}
+            - 🔑 默认密码: password
+            ### 🧊 固件版本
+            - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
+            - ${{ env.COMMIT_AUTHOR }}
+            - ${{ env.COMMIT_DATE }}
+            - ${{ env.COMMIT_MESSAGE }}
+            - ${{ env.COMMIT_HASH }}

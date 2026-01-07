@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# 打包Toolchain
+# 打包toolchain目录
 if [[ $REBUILD_TOOLCHAIN = 'true' ]]; then
-    echo -e "\e[1;33m开始打包toolchain目录\e[0m"
     cd $OPENWRT_PATH
     sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
     [ -d ".ccache" ] && (ccache=".ccache"; ls -alh .ccache)
     du -h --max-depth=1 ./staging_dir
-    du -h --max-depth=1 ./ --exclude=staging_dir
     tar -I zstdmt -cf $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst staging_dir/host* staging_dir/tool* $ccache
     ls -lh $GITHUB_WORKSPACE/output
     [ -e $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst ] || exit 1
@@ -153,9 +151,8 @@ echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
 
 # 拉取编译源码
 begin_time=$(date '+%H:%M:%S')
-[[ $REPO_BRANCH != "master" ]] && BRANCH="-b $REPO_BRANCH --single-branch"
 cd /workdir
-git clone -q $BRANCH $REPO_URL openwrt
+git clone -q -b $REPO_BRANCH --single-branch $REPO_URL openwrt
 status "拉取编译源码"
 ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 [ -d openwrt ] && cd openwrt || exit
@@ -165,6 +162,7 @@ echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 begin_time=$(date '+%H:%M:%S')
 [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
 make defconfig 1>/dev/null 2>&1
+rm -rf staging_dir logs tmp feeds
 
 # 源仓库与分支
 SOURCE_REPO=$(basename $REPO_URL)
@@ -186,7 +184,7 @@ else
 fi
 echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
-# Toolchain缓存文件名
+# toolchain缓存文件名
 TOOLS_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
 CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
 echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
@@ -202,20 +200,18 @@ COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
 echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
 status "生成全局变量"
 
-# 下载并部署Toolchain
+# 下载部署toolchain缓存
 if [[ $TOOLCHAIN = 'true' ]]; then
     cache_xa=$(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
     cache_xc=$(curl -sL api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
     if [[ $cache_xa || $cache_xc ]]; then
         begin_time=$(date '+%H:%M:%S')
         [ $cache_xa ] && wget -qc -t=3 $cache_xa || wget -qc -t=3 $cache_xc
-        [ -e *.tzst ]; status "下载toolchain缓存文件"
         [ -e *.tzst ] && {
-            begin_time=$(date '+%H:%M:%S')
             tar -I unzstd -xf *.tzst || tar -xf *.tzst
             [ $cache_xa ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
-            sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
-            [ -d staging_dir ]; status "部署toolchain编译缓存"
+            [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
+            status "下载部署toolchain缓存"
         }
     else
         echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
@@ -234,14 +230,10 @@ status "更新&安装插件"
 destination_dir="package/A"
 [ -d $destination_dir ] || mkdir -p $destination_dir
 
-color cy "添加&替换插件"
-
 # 添加额外插件
 clone_dir openwrt-23.05 https://github.com/coolsnowwolf/luci luci-app-adguardhome
-git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
-clone_all https://github.com/nikkinikki-org/OpenWrt-nikki
-clone_all https://github.com/nikkinikki-org/OpenWrt-momo
-clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
+clone_all https://github.com/lwb1978/openwrt-gecoosac
+clone_dir https://github.com/sirpdboy/luci-app-ddns-go ddns-go luci-app-ddns-go
 
 clone_all https://github.com/sbwml/luci-app-alist
 clone_all https://github.com/sbwml/luci-app-mosdns
@@ -255,16 +247,23 @@ clone_all https://github.com/brvphoenix/wrtbwmon
 
 # 科学上网插件
 clone_all https://github.com/fw876/helloworld
-clone_all https://github.com/xiaorouji/openwrt-passwall-packages
-clone_all https://github.com/xiaorouji/openwrt-passwall
-clone_all https://github.com/xiaorouji/openwrt-passwall2
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall-packages
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall2
 clone_dir https://github.com/vernesong/OpenClash luci-app-openclash
-clone_dir https://github.com/sbwml/openwrt_helloworld shadowsocks-rust
+clone_all https://github.com/nikkinikki-org/OpenWrt-nikki
+clone_all https://github.com/nikkinikki-org/OpenWrt-momo
+clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
+git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
 
 # Themes
 git_clone https://github.com/kiddin9/luci-theme-edge
 git_clone https://github.com/jerrykuku/luci-theme-argon
 git_clone https://github.com/jerrykuku/luci-app-argon-config
+git_clone https://github.com/eamonxg/luci-theme-aurora
+git_clone https://github.com/eamonxg/luci-app-aurora-config
+git_clone https://github.com/sirpdboy/luci-theme-kucat
+git_clone https://github.com/sirpdboy/luci-app-kucat-config
 
 # 晶晨宝盒
 clone_all https://github.com/ophub/luci-app-amlogic
@@ -283,34 +282,34 @@ if [ $PART_SIZE ]; then
     echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>$GITHUB_WORKSPACE/$CONFIG_FILE
 fi
 
-# 修改默认IP
-[ $DEFAULT_IP ] && sed -i '/n) ipad/s/".*"/"'"$DEFAULT_IP"'"/' package/base-files/files/bin/config_generate
+# 修改默认ip地址
+[ $IP_ADDRESS ] && sed -i '/n) ipad/s/".*"/"'"$IP_ADDRESS"'"/' package/base-files/files/bin/config_generate
 
-# 更改默认 Shell 为 zsh
+# 更改默认shell为zsh
 # sed -i 's/\/bin\/ash/\/usr\/bin\/zsh/g' package/base-files/files/etc/passwd
 
-# TTYD 免登录
+# ttyd免登录
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
-# 设置 root 用户密码为 password
+# 设置root用户密码为password
 sed -i 's/root:::0:99999:7:::/root:$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.::0:99999:7:::/g' package/base-files/files/etc/shadow
 
-# 更改 Argon 主题背景
+# 更改argon主题背景
 cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/bg1.jpg
 
 # 删除主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -exec sed -i '/set luci.main.mediaurlbase/d' {} +
 
-# 设置 nlbwmon 独立菜单
+# 设置nlbwmon独立菜单
 sed -i 's/services\/nlbw/nlbw/g; /path/s/admin\///g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json
 sed -i 's/services\///g' feeds/luci/applications/luci-app-nlbwmon/htdocs/luci-static/resources/view/nlbw/config.js
 
-# 修复 Makefile 路径
+# 修复Makefile路径
 find $destination_dir -type f -name "Makefile" | xargs sed -i \
     -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
     -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
 
-# 移除 attendedsysupgrade
+# 移除attendedsysupgrade
 find "feeds/luci/collections" -name "Makefile" | while read -r makefile; do
     if grep -q "luci-app-attendedsysupgrade" "$makefile"; then
         sed -i "/luci-app-attendedsysupgrade/d" "$makefile"
@@ -342,12 +341,12 @@ status "更新配置文件"
 }
 
 # 下载zsh终端工具
-[[ $ZSH_TOOL = 'true' ]] && grep -q "zsh=y" .config && {
+if grep -q "zsh=y" .config; then
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
     $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
     status "下载zsh终端工具"
-}
+fi
 
 echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
 

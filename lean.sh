@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# 打包Toolchain
+# 打包toolchain目录
 if [[ $REBUILD_TOOLCHAIN = 'true' ]]; then
-    echo -e "\e[1;33m开始打包toolchain目录\e[0m"
     cd $OPENWRT_PATH
     sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
     [ -d ".ccache" ] && (ccache=".ccache"; ls -alh .ccache)
     du -h --max-depth=1 ./staging_dir
-    du -h --max-depth=1 ./ --exclude=staging_dir
     tar -I zstdmt -cf $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst staging_dir/host* staging_dir/tool* $ccache
     ls -lh $GITHUB_WORKSPACE/output
     [ -e $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst ] || exit 1
@@ -153,9 +151,8 @@ echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
 
 # 拉取编译源码
 begin_time=$(date '+%H:%M:%S')
-[[ $REPO_BRANCH != "master" ]] && BRANCH="-b $REPO_BRANCH --single-branch"
 cd /workdir
-git clone -q $BRANCH $REPO_URL openwrt
+git clone -q -b $REPO_BRANCH --single-branch $REPO_URL openwrt
 status "拉取编译源码"
 ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 [ -d openwrt ] && cd openwrt || exit
@@ -168,6 +165,7 @@ sed -i '/luci/s/^#//; /luci.git;openwrt/s/^/#/' feeds.conf.default
 begin_time=$(date '+%H:%M:%S')
 [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
 make defconfig 1>/dev/null 2>&1
+rm -rf staging_dir logs tmp feeds
 
 # 源仓库与分支
 SOURCE_REPO=$(basename $REPO_URL)
@@ -185,7 +183,7 @@ KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
 KERNEL_VERSION=$(awk -F '-' '/KERNEL/{print $2}' include/kernel-$KERNEL | awk '{print $1}')
 echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
-# Toolchain缓存文件名
+# toolchain缓存文件名
 TOOLS_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
 CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
 echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
@@ -201,20 +199,18 @@ COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
 echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
 status "生成全局变量"
 
-# 下载并部署Toolchain
+# 下载部署toolchain缓存
 if [[ $TOOLCHAIN = 'true' ]]; then
     cache_xa=$(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
     cache_xc=$(curl -sL api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
     if [[ $cache_xa || $cache_xc ]]; then
         begin_time=$(date '+%H:%M:%S')
         [ $cache_xa ] && wget -qc -t=3 $cache_xa || wget -qc -t=3 $cache_xc
-        [ -e *.tzst ]; status "下载toolchain缓存文件"
         [ -e *.tzst ] && {
-            begin_time=$(date '+%H:%M:%S')
             tar -I unzstd -xf *.tzst || tar -xf *.tzst
             [ $cache_xa ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
-            sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
-            [ -d staging_dir ]; status "部署toolchain编译缓存"
+            [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
+            status "下载部署toolchain缓存"
         }
     else
         echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
@@ -232,8 +228,6 @@ status "更新&安装插件"
 # 创建插件保存目录
 destination_dir="package/A"
 [ -d $destination_dir ] || mkdir -p $destination_dir
-
-color cy "添加&替换插件"
 
 # 添加额外插件
 git_clone https://github.com/kongfl888/luci-app-adguardhome
@@ -254,9 +248,9 @@ clone_all https://github.com/linkease/istore luci
 
 # 科学上网插件
 clone_all https://github.com/fw876/helloworld
-clone_all https://github.com/xiaorouji/openwrt-passwall-packages
-clone_all https://github.com/xiaorouji/openwrt-passwall
-clone_all https://github.com/xiaorouji/openwrt-passwall2
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall-packages
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall
+clone_all https://github.com/Openwrt-Passwall/openwrt-passwall2
 clone_dir https://github.com/vernesong/OpenClash luci-app-openclash
 
 # Themes
@@ -283,22 +277,22 @@ if [ $PART_SIZE ]; then
     echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>$GITHUB_WORKSPACE/$CONFIG_FILE
 fi
 
-# 修改默认IP
-[ $DEFAULT_IP ] && sed -i '/n) ipad/s/".*"/"'"$DEFAULT_IP"'"/' package/base-files/luci/bin/config_generate
+# 修改默认ip地址
+[ $IP_ADDRESS ] && sed -i '/n) ipad/s/".*"/"'"$IP_ADDRESS"'"/' package/base-files/*/bin/config_generate
 
-# 更改默认 Shell 为 zsh
+# 更改默认shell为zsh
 # sed -i 's/\/bin\/ash/\/usr\/bin\/zsh/g' package/base-files/files/etc/passwd
 
-# TTYD 免登录
+# ttyd免登录
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
-# 设置 root 用户密码为空
+# 设置root用户密码为空
 # sed -i '/CYXluq4wUazHjmCDBCqXF/d' package/lean/default-settings/files/zzz-default-settings 
 
-# 更改 Argon 主题背景
+# 更改argon主题背景
 cp -f $GITHUB_WORKSPACE/images/bg1.jpg feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/bg1.jpg
 
-# x86 型号只显示 CPU 型号
+# x86型号只显示cpu型号
 sed -i 's/${g}.*/${a}${b}${c}${d}${e}${f}${hydrid}/g' package/lean/autocore/files/x86/autocore
 sed -i "s/'C'/'Core '/g; s/'T '/'Thread '/g" package/lean/autocore/files/x86/autocore
 
@@ -309,20 +303,16 @@ sed -i "s/$ORIG_VERSION/R$(date +%y.%-m.%-d)/g" package/lean/default-settings/fi
 # 删除主题默认设置
 # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -exec sed -i '/set luci.main.mediaurlbase/d' {} +
 
-# 调整 Docker 到 服务 菜单
+# 调整docker到"服务"菜单
 # sed -i 's/"admin"/"admin", "services"/g' feeds/luci/applications/luci-app-dockerman/luasrc/controller/*.lua
 # sed -i 's/"admin"/"admin", "services"/g; s/admin\//admin\/services\//g' feeds/luci/applications/luci-app-dockerman/luasrc/model/cbi/dockerman/*.lua
 # sed -i 's/admin\//admin\/services\//g' feeds/luci/applications/luci-app-dockerman/luasrc/view/dockerman/*.htm
 # sed -i 's|admin\\|admin\\/services\\|g' feeds/luci/applications/luci-app-dockerman/luasrc/view/dockerman/container.htm
 
-# 调整 ZeroTier 到 服务 菜单
-# sed -i 's/vpn/services/g; s/VPN/Services/g' feeds/luci/applications/luci-app-zerotier/luasrc/controller/zerotier.lua
-# sed -i 's/vpn/services/g' feeds/luci/applications/luci-app-zerotier/luasrc/view/zerotier/zerotier_status.htm
-
-# 取消对 samba4 的菜单调整
+# 取消对samba4的菜单调整
 # sed -i '/samba4/s/^/#/' package/lean/default-settings/files/zzz-default-settings
 
-# 修复 Makefile 路径
+# 修复Makefile路径
 find $destination_dir -type f -name "Makefile" | xargs sed -i \
     -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
     -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
@@ -352,12 +342,12 @@ status "更新配置文件"
 }
 
 # 下载zsh终端工具
-[[ $ZSH_TOOL = 'true' ]] && grep -q "zsh=y" .config && {
+if grep -q "zsh=y" .config; then
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
     $GITHUB_WORKSPACE/scripts/preset-terminal-tools.sh
     status "下载zsh终端工具"
-}
+fi
 
 echo -e "$(color cy 当前编译机型) $(color cb $SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-$KERNEL_VERSION)"
 
