@@ -158,11 +158,8 @@ ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 [ -d openwrt ] && cd openwrt || exit
 echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 
-# 生成全局变量
+# 设置全局变量
 begin_time=$(date '+%H:%M:%S')
-[ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
-make defconfig 1>/dev/null 2>&1
-rm -rf staging_dir logs tmp feeds
 
 # 源仓库与分支
 SOURCE_REPO=$(basename $REPO_URL)
@@ -170,18 +167,16 @@ echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
 echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
 
 # 平台架构
-TARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_BOARD/{print $2}' .config)
-SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
+TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" $GITHUB_WORKSPACE/$CONFIG_FILE)
+SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" $GITHUB_WORKSPACE/$CONFIG_FILE)
 DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
 echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
 
 # 内核版本
-KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
-if [ -e include/kernel-$KERNEL ]; then
-    KERNEL_VERSION=$(awk -F '-' '/KERNEL/{print $2}' include/kernel-$KERNEL | awk '{print $1}')
-else
-    KERNEL_VERSION=$(awk -F '-' '/KERNEL/{print $2}' target/linux/generic/kernel-$KERNEL | awk '{print $1}')
-fi
+KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[\d\.]+' target/linux/$TARGET_NAME/Makefile)
+KERNEL_FILE="include/kernel-$KERNEL"
+[ -e "$KERNEL_FILE" ] || KERNEL_FILE="target/linux/generic/kernel-$KERNEL"
+KERNEL_VERSION=$(grep -oP 'LINUX_KERNEL_HASH-\K[\d\.]+' $KERNEL_FILE)
 echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
 # toolchain缓存文件名
@@ -190,29 +185,25 @@ CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
 echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
 
 # 源码更新信息
-COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")
-echo "COMMIT_AUTHOR=$COMMIT_AUTHOR" >>$GITHUB_ENV
-COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")
-echo "COMMIT_DATE=$COMMIT_DATE" >>$GITHUB_ENV
-COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")
-echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >>$GITHUB_ENV
-COMMIT_HASH=$(git show -s --date=short --format="hash: %H")
-echo "COMMIT_HASH=$COMMIT_HASH" >>$GITHUB_ENV
+echo "COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")" >>$GITHUB_ENV
+echo "COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")" >>$GITHUB_ENV
+echo "COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")" >>$GITHUB_ENV
+echo "COMMIT_HASH=$(git show -s --date=short --format="hash: %H")" >>$GITHUB_ENV
 status "生成全局变量"
 
 # 下载部署toolchain缓存
 if [[ $TOOLCHAIN = 'true' ]]; then
-    cache_xa=$(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
-    cache_xc=$(curl -sL api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
+    cache_xa=$(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
+    cache_xc=$(curl -sL https://api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
     if [[ $cache_xa || $cache_xc ]]; then
         begin_time=$(date '+%H:%M:%S')
-        [ $cache_xa ] && wget -qc -t=3 $cache_xa || wget -qc -t=3 $cache_xc
-        [ -e *.tzst ] && {
+        wget -qc -t=3 "${cache_xa:-$cache_xc}"
+        if [ -e *.tzst ]; then
             tar -I unzstd -xf *.tzst || tar -xf *.tzst
             [ $cache_xa ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
             [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
             status "下载部署toolchain缓存"
-        }
+        fi
     else
         echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
     fi
@@ -345,12 +336,12 @@ make defconfig 1>/dev/null 2>&1
 status "更新配置文件"
 
 # 下载openclash运行内核
-[[ $CLASH_KERNEL =~ amd64|arm64|armv7|armv6|armv5|386 ]] && grep -q "luci-app-openclash=y" .config && {
+if [[ "$CLASH_KERNEL" =~ ^(amd64|arm64|armv7|armv6|armv5|386)$ ]] && grep -q "luci-app-openclash=y" .config; then
     begin_time=$(date '+%H:%M:%S')
     chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
     $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
     status "下载openclash运行内核"
-}
+fi
 
 # 下载zsh终端工具
 if grep -q "zsh=y" .config; then

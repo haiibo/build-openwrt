@@ -70,6 +70,7 @@ jobs:
     env:
       IP_ADDRESS: ${{inputs.ip_address}}
       CONFIG_FILE: configs/armv8-${{inputs.source_repo}}.config
+      DIY_SCRIPT: ${{inputs.source_repo}}.sh
       RELEASE_TAG: armv8-${{inputs.source_repo}}
       TZ: Asia/Shanghai
 
@@ -77,21 +78,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
-      - name: Set Compile Source Code
-        run: |
-          if [[ ${{inputs.source_repo}} == 'lean' ]]; then
-            echo "REPO_URL=https://github.com/coolsnowwolf/lede" >>$GITHUB_ENV
-            echo "REPO_BRANCH=master" >>$GITHUB_ENV
-          elif [[ ${{inputs.source_repo}} == 'immwrt' ]]; then
-            echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >>$GITHUB_ENV
-            echo "REPO_BRANCH=openwrt-24.10" >>$GITHUB_ENV
-          fi
-
       - name: Initialization Environment
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          docker rmi -f $(docker images -q) 2>/dev/null || true
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android $AGENT_TOOLSDIRECTORY
           sudo -E apt -yqq update
           sudo -E apt -yqq install rename $(curl -fsSL is.gd/depends_ubuntu_2404)
@@ -100,35 +90,27 @@ jobs:
           sudo -E apt -yqq clean
           sudo timedatectl set-timezone "$TZ"
 
-      - name: Clone Source Code
+      - name: Set Variable Values
         run: |
-          df -hT $PWD
-          git clone -b $REPO_BRANCH --single-branch $REPO_URL openwrt
-          cd openwrt
+          REPO_URL=$(grep -oP 'REPO_URL="\K[^"]+' $DIY_SCRIPT)
+          echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
+          echo "SOURCE_REPO=$(basename $REPO_URL)" >>$GITHUB_ENV
+          REPO_BRANCH=$(grep -oP 'REPO_BRANCH="\K[^"]+' $DIY_SCRIPT)
+          echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
           echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
-          echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
-
-      - name: Generate Variables
-        run: |
-          cp $CONFIG_FILE $OPENWRT_PATH/.config
-          cd $OPENWRT_PATH
-          make defconfig >/dev/null 2>&1
-          SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
-          echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
-          TARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_BOARD/{print $2}' .config)
-          SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
-          DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
-          echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+          TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" $CONFIG_FILE)
+          SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" $CONFIG_FILE)
+          echo "DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME" >>$GITHUB_ENV
 
       - name: Download OpenWrt Firmware
         id: download
         run: |
           FIRMWARE_PATH=openwrt/bin/targets/armvirt/64
-          [ -d $FIRMWARE_PATH ] || mkdir -p $FIRMWARE_PATH
-          echo -e $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $DEVICE_TARGET.*$SOURCE_REPO.*$REPO_BRANCH | awk -F '"' '{print $4}') >release.txt
-          [ $IP_ADDRESS ] && sed -i "s/[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*/$IP_ADDRESS/g" release.txt
+          [ -d "$FIRMWARE_PATH" ] || mkdir -p "$FIRMWARE_PATH"
+          echo -e $(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | grep "$DEVICE_TARGET.*$REPO_URL.*$REPO_BRANCH" | cut -d '"' -f4) >release.txt
+          [ -n "$IP_ADDRESS" ] && sed -Ei "s/\b([0-9]{1,3}\.){3}[0-9]{1,3}\b/${IP_ADDRESS}/g" release.txt
           cd $FIRMWARE_PATH
-          wget -q $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $RELEASE_TAG/ | awk -F '"' '{print $4}' | grep -v img.gz)
+          wget -q $(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | grep "$RELEASE_TAG/" | grep -v img.gz | cut -d '"' -f4)
           echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
           echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
           echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >>$GITHUB_ENV
