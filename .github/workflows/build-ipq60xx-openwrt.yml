@@ -151,7 +151,7 @@ jobs:
           sudo mount -o compress=zstd $LV_NAME /workdir
           sudo chown -R runner:runner /workdir && df -hT
 
-      - name: Load Compile Script
+      - name: Load Custom Script
         run: |
           sed -i 's/immortalwrt\/immortalwrt/VIKINGYFY\/immortalwrt/' $DIY_SCRIPT
           sed -i 's/REPO_BRANCH=".*"/REPO_BRANCH="main"/' $DIY_SCRIPT

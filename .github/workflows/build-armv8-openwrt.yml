@@ -157,7 +157,7 @@ jobs:
           sudo mount -o compress=zstd $LV_NAME /workdir
           sudo chown -R runner:runner /workdir && df -hT
 
-      - name: Load Compile Script
+      - name: Load Custom Script
         run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
       - name: Compile Toolchain
