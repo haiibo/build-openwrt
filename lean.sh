@@ -60,10 +60,10 @@ status_info() {
     fi
     if [[ $exit_code -eq 0 ]]; then
         printf "%s %-53s %s %s %s %s %s %s %s\n" \
-        $(color cy "⏳ ${task_name}") [ $(color cg ✔) ] $(color cw "$time_info")
+        $(color cy "⏳ $task_name") [ $(color cg ✔) ] $(color cw "$time_info")
     else
         printf "%s %-53s %s %s %s %s\n" \
-        $(color cy "⏳ ${task_name}") [ $(color cr ✕) ] $(color cw "$time_info")
+        $(color cy "⏳ $task_name") [ $(color cr ✖) ] $(color cw "$time_info")
     fi
 }
 
@@ -94,7 +94,7 @@ git_clone() {
         target_dir="${repo_url##*/}"
     fi
     git clone -q $branch --depth=1 $repo_url $target_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
         return 1
     }
     rm -rf $target_dir/{.git*,README*.md,LICENSE}
@@ -121,7 +121,7 @@ clone_dir() {
         shift 2
     fi
     git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
         rm -rf $temp_dir
         return 1
     }
@@ -131,7 +131,7 @@ clone_dir() {
         [[ -d $source_dir ]] || \
         source_dir=$(find $temp_dir -maxdepth 4 -type d -name $target_dir -print -quit) && \
         [[ -d $source_dir ]] || {
-            print_info $(color cr 查找) $target_dir [ $(color cr ✕) ]
+            print_info $(color cr 查找) $target_dir [ $(color cr ✖) ]
             continue
         }
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
@@ -159,14 +159,14 @@ clone_all() {
         shift 2
     fi
     git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✕) ]
+        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
         rm -rf $temp_dir
         return 1
     }
     process_dir() {
         local repo_dir="$1"
-        while IFS= read -r target_dir; do
-            local source_dir="$repo_dir/$target_dir"
+        while IFS= read -r source_dir; do
+            local target_dir=$(basename "$source_dir")
             local current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
             if [[ -d "$current_dir" ]]; then
                 rm -rf "$current_dir"
@@ -176,7 +176,7 @@ clone_all() {
                 mv -f "$source_dir" "$destination_dir"
                 print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
             fi
-        done < <(find "$repo_dir" -maxdepth 1 -mindepth 1 -type d ! -name '.*' -printf '%f\n')
+        done < <(find "$repo_dir" -maxdepth 1 -mindepth 1 -type d ! -name '.*')
     }
     if [[ $# -eq 0 ]]; then
         process_dir "$temp_dir"
@@ -184,7 +184,7 @@ clone_all() {
         for dir_name in "$@"; do
             local repo_dir="$temp_dir/$dir_name"
             [[ -d "$repo_dir" ]] && process_dir "$repo_dir" || \
-            print_info $(color cr 目录) $dir_name [ $(color cr ✕) ]
+            print_info $(color cr 目录) $dir_name [ $(color cr ✖) ]
         done
     fi
     rm -rf "$temp_dir"
@@ -353,8 +353,8 @@ add_custom_packages() {
 
     # 修复Makefile路径
     find "$destination_dir" -type f -name "Makefile" | xargs sed -i \
-    -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
-    -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
+        -e 's?\.\./\.\./\(lang\|devel\)?$(TOPDIR)/feeds/packages/\1?' \
+        -e 's?\.\./\.\./luci.mk?$(TOPDIR)/feeds/luci/luci.mk?'
 
     # 转换插件语言翻译
     for e in $(ls -d $destination_dir/luci-*/po feeds/luci/applications/luci-*/po); do
@@ -420,11 +420,29 @@ update_config_file() {
     make defconfig 1>/dev/null 2>&1
 }
 
+# 检测指令集架构
+detect_openwrt_arch() {
+    local config="${1:-.config}"
+    local arch_pkgs=$(grep '^CONFIG_TARGET_ARCH_PACKAGES=' "$config" | cut -d'"' -f2)
+    [ -n "$arch_pkgs" ] || return 1
+    case "$arch_pkgs" in
+        x86_64) echo "amd64" ;; i386*) echo "386" ;; aarch64*) echo "arm64" ;;
+        arm_cortex-a*) echo "armv7" ;; arm_arm1176*|arm_mpcore*) echo "armv6" ;;
+        arm_arm926*|arm_fa526|arm*xscale) echo "armv5" ;;
+        mips64el_*) echo "mips64le" ;; mips64_*) echo "mips64" ;;
+        mipsel_*) echo "mipsle" ;; mips_*) echo "mips" ;;
+        riscv64*) echo "riscv64" ;; loongarch64*) echo "loong64" ;;
+        powerpc64_*) echo "ppc64" ;; powerpc_*) echo "ppc" ;;
+        arc_*) echo "arc" ;; *) echo "unknown" ;;
+    esac
+}
+
 # 下载openclash运行内核
 preset_openclash_core() {
-    if [[ "$CLASH_KERNEL" =~ ^(amd64|arm64|armv7|armv6|armv5|386)$ ]] && grep -q "luci-app-openclash=y" .config; then
+    CPU_ARCH=$(detect_openwrt_arch ".config")
+    if [[ "$CPU_ARCH" =~ ^(amd64|arm64|armv7|armv6|armv5|386|mips64|mips64le|riscv64)$ ]] && grep -q "luci-app-openclash=y" .config; then
         chmod +x $GITHUB_WORKSPACE/scripts/preset-clash-core.sh
-        $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CLASH_KERNEL
+        $GITHUB_WORKSPACE/scripts/preset-clash-core.sh $CPU_ARCH
     else
         return 99
     fi
@@ -441,12 +459,13 @@ preset_shell_tools() {
 }
 
 show_build_info() {
-    echo -e "$(color cc "📊 当前编译信息")"
+    echo -e "$(color cy "📊 当前编译信息")"
     echo "========================================"
-    echo "固件源码: $(color cb "$SOURCE_REPO")"
-    echo "源码分支: $(color cb "$REPO_BRANCH")"
-    echo "目标设备: $(color cb "$DEVICE_TARGET")"
-    echo "内核版本: $(color cb "$KERNEL_VERSION")"
+    echo "🔷 固件源码: $(color cc "$SOURCE_REPO")"
+    echo "🔷 源码分支: $(color cc "$REPO_BRANCH")"
+    echo "🔷 目标设备: $(color cc "$DEVICE_TARGET")"
+    echo "🔷 内核版本: $(color cc "$KERNEL_VERSION")"
+    echo "🔷 编译架构: $(color cc "$CPU_ARCH")"
     echo "========================================"
 }
 

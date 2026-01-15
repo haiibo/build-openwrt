@@ -22,7 +22,6 @@ jobs:
       target: ${{matrix.target}}
       ip_address: 10.0.0.2
       partsize: 800
-      openclash: amd64
       toolchain: true
       artifact: false
       release: true
@@ -41,7 +40,6 @@ jobs:
       openwrt_board: s905d_s905x3
       openwrt_kernel: 6.6.y_6.12.y
       kernel_repo: ophub/kernel
-      openclash: arm64
       toolchain: true
       artifact: false
       release: true
@@ -60,7 +58,6 @@ jobs:
       target: ${{matrix.target}}
       ip_address: 10.0.0.1
       wifi: ${{matrix.wifi}}
-      openclash: arm64
       toolchain: true
       artifact: false
       release: true

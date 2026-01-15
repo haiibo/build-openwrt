@@ -18,9 +18,6 @@ on:
       toolchain:
         required: true
         type: string
-      openclash:
-        required: true
-        type: string
       artifact:
         required: true
         type: string
@@ -56,13 +53,6 @@ on:
         type: choice
         options: ['wifi-yes', 'wifi-no']
 
-      openclash:
-        description: '预设openclash内核'
-        required: false
-        default: 'arm64'
-        type: choice
-        options: [false, amd64, arm64, armv7, armv6, armv5, 386]
-
       toolchain:
         description: '使用toolchain缓存'
         required: false
@@ -88,7 +78,6 @@ jobs:
 
     env:
       IP_ADDRESS: ${{inputs.ip_address}}
-      CLASH_KERNEL: ${{inputs.openclash}}
       TOOLCHAIN: ${{inputs.toolchain}}
       CONFIG_FILE: configs/${{inputs.target}}-${{inputs.wifi}}.config
       DIY_SCRIPT: ${{inputs.source}}.sh
