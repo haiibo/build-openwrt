@@ -90,7 +90,7 @@ jobs:
           sudo -E apt -yqq clean
           sudo timedatectl set-timezone "$TZ"
 
-      - name: Set Variable Values
+      - name: Generate Variables
         run: |
           REPO_URL=$(grep -oP 'REPO_URL="\K[^"]+' $DIY_SCRIPT)
           echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
