@@ -1,19 +1,17 @@
 #!/bin/bash
 
 # 打包toolchain目录
-if [[ $REBUILD_TOOLCHAIN = 'true' ]]; then
+if [[ "$REBUILD_TOOLCHAIN" = 'true' ]]; then
     cd $OPENWRT_PATH
     sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
-    if [[ -d ".ccache" && -n "$(ls -A .ccache)" ]]; then
-        echo "🔍 缓存目录内容:"
-        ls -Alh .ccache
+    if [[ -d ".ccache" && $(du -s .ccache | cut -f1) -gt 0 ]]; then
+        echo "🔍 缓存目录大小:"
+        du -h --max-depth=1 .ccache
         ccache_dir=".ccache"
-    else
-        ccache_dir=""
     fi
     echo "📦 工具链目录大小:"
-    du -h --max-depth=1 ./staging_dir
-    tar -I zstdmt -cf $GITHUB_WORKSPACE/output/$CACHE_NAME.tzst staging_dir/host* staging_dir/tool* $ccache_dir
+    du -h --max-depth=1 staging_dir
+    tar -I zstdmt -cf "$GITHUB_WORKSPACE/output/$CACHE_NAME.tzst" staging_dir/host* staging_dir/tool* $ccache_dir
     echo "📁 输出目录内容:"
     ls -lh "$GITHUB_WORKSPACE/output"
     if [[ ! -e "$GITHUB_WORKSPACE/output/$CACHE_NAME.tzst" ]]; then
@@ -25,11 +23,11 @@ if [[ $REBUILD_TOOLCHAIN = 'true' ]]; then
 fi
 
 # 创建toolchain缓存保存目录
-[ -d $GITHUB_WORKSPACE/output ] || mkdir $GITHUB_WORKSPACE/output
+[ -d "$GITHUB_WORKSPACE/output" ] || mkdir "$GITHUB_WORKSPACE/output"
 
 # 颜色输出
 color() {
-    case $1 in
+    case "$1" in
         cr) echo -e "\e[1;31m${2}\e[0m" ;;  # 红色
         cg) echo -e "\e[1;32m${2}\e[0m" ;;  # 绿色
         cy) echo -e "\e[1;33m${2}\e[0m" ;;  # 黄色
@@ -42,23 +40,17 @@ color() {
 
 # 状态显示和时间统计
 status_info() {
-    local task_name="$1"
+    local task_name="$1" begin_time=$(date +%s) exit_code time_info
     shift
-    local begin_time end_time total_time exit_code time_info
-    begin_time=$(date +%s)
     "$@"
     exit_code=$?
-    end_time=$(date +%s)
-    if [[ $exit_code -eq 99 ]]; then
-        return 0
-    fi
+    [[ "$exit_code" -eq 99 ]] && return 0
     if [[ -n "$begin_time" ]]; then
-        total_time="$((end_time - begin_time))"
-        time_info="==> 用时 ${total_time} 秒"
+        time_info="==> 用时 $(($(date +%s) - begin_time)) 秒"
     else
         time_info=""
     fi
-    if [[ $exit_code -eq 0 ]]; then
+    if [[ "$exit_code" -eq 0 ]]; then
         printf "%s %-53s %s %s %s %s %s %s %s\n" \
         $(color cy "⏳ $task_name") [ $(color cg ✔) ] $(color cw "$time_info")
     else
@@ -69,12 +61,12 @@ status_info() {
 
 # 查找目录
 find_dir() {
-    find $1 -maxdepth 3 -type d -name $2 -print -quit 2>/dev/null
+    find $1 -maxdepth 3 -type d -name "$2" -print -quit 2>/dev/null
 }
 
 # 打印信息
 print_info() {
-    printf "%s %-40s %s %s %s\n" $1 $2 $3 $4 $5
+    printf "%s %-40s %s %s %s\n" "$1" "$2" "$3" "$4" "$5"
 }
 
 # 添加整个源仓库(git clone)
@@ -88,24 +80,20 @@ git_clone() {
         repo_url="$2"
         shift 2
     fi
-    if [[ $# -gt 0 ]]; then
-        target_dir="$1"
-    else
-        target_dir="${repo_url##*/}"
-    fi
-    git clone -q $branch --depth=1 $repo_url $target_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
+    target_dir="${1:-${repo_url##*/}}"
+    git clone -q $branch --depth=1 "$repo_url" "$target_dir" 2>/dev/null || {
+        print_info $(color cr 拉取) "$repo_url" [ $(color cr ✖) ]
         return 1
     }
     rm -rf $target_dir/{.git*,README*.md,LICENSE}
     current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
-    if [[ -d $current_dir ]]; then
-        rm -rf $current_dir
-        mv -f $target_dir ${current_dir%/*}
-        print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
+    if [[ -d "$current_dir" ]]; then
+        rm -rf "$current_dir"
+        mv -f "$target_dir" "${current_dir%/*}"
+        print_info $(color cg 替换) "$target_dir" [ $(color cg ✔) ]
     else
-        mv -f $target_dir $destination_dir
-        print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
+        mv -f "$target_dir" "$destination_dir"
+        print_info $(color cb 添加) "$target_dir" [ $(color cb ✔) ]
     fi
 }
 
@@ -120,31 +108,31 @@ clone_dir() {
         repo_url="$2"
         shift 2
     fi
-    git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
-        rm -rf $temp_dir
+    git clone -q $branch --depth=1 "$repo_url" "$temp_dir" 2>/dev/null || {
+        print_info $(color cr 拉取) "$repo_url" [ $(color cr ✖) ]
+        rm -rf "$temp_dir"
         return 1
     }
     local target_dir source_dir current_dir
     for target_dir in "$@"; do
         source_dir=$(find_dir "$temp_dir" "$target_dir")
-        [[ -d $source_dir ]] || \
-        source_dir=$(find $temp_dir -maxdepth 4 -type d -name $target_dir -print -quit) && \
-        [[ -d $source_dir ]] || {
-            print_info $(color cr 查找) $target_dir [ $(color cr ✖) ]
+        [[ -d "$source_dir" ]] || \
+        source_dir=$(find "$temp_dir" -maxdepth 4 -type d -name "$target_dir" -print -quit) && \
+        [[ -d "$source_dir" ]] || {
+            print_info $(color cr 查找) "$target_dir" [ $(color cr ✖) ]
             continue
         }
         current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
-        if [[ -d $current_dir ]]; then
-            rm -rf $current_dir
-            mv -f $source_dir ${current_dir%/*}
-            print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
+        if [[ -d "$current_dir" ]]; then
+            rm -rf "$current_dir"
+            mv -f "$source_dir" "${current_dir%/*}"
+            print_info $(color cg 替换) "$target_dir" [ $(color cg ✔) ]
         else
-            mv -f $source_dir $destination_dir
-            print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
+            mv -f "$source_dir" "$destination_dir"
+            print_info $(color cb 添加) "$target_dir" [ $(color cb ✔) ]
         fi
     done
-    rm -rf $temp_dir
+    rm -rf "$temp_dir"
 }
 
 # 添加源仓库内的所有子目录
@@ -158,33 +146,31 @@ clone_all() {
         repo_url="$2"
         shift 2
     fi
-    git clone -q $branch --depth=1 $repo_url $temp_dir 2>/dev/null || {
-        print_info $(color cr 拉取) $repo_url [ $(color cr ✖) ]
-        rm -rf $temp_dir
+    git clone -q $branch --depth=1 "$repo_url" "$temp_dir" 2>/dev/null || {
+        print_info $(color cr 拉取) "$repo_url" [ $(color cr ✖) ]
+        rm -rf "$temp_dir"
         return 1
     }
     process_dir() {
-        local repo_dir="$1"
         while IFS= read -r source_dir; do
             local target_dir=$(basename "$source_dir")
             local current_dir=$(find_dir "package/ feeds/ target/" "$target_dir")
             if [[ -d "$current_dir" ]]; then
                 rm -rf "$current_dir"
                 mv -f "$source_dir" "${current_dir%/*}"
-                print_info $(color cg 替换) $target_dir [ $(color cg ✔) ]
+                print_info $(color cg 替换) "$target_dir" [ $(color cg ✔) ]
             else
                 mv -f "$source_dir" "$destination_dir"
-                print_info $(color cb 添加) $target_dir [ $(color cb ✔) ]
+                print_info $(color cb 添加) "$target_dir" [ $(color cb ✔) ]
             fi
-        done < <(find "$repo_dir" -maxdepth 1 -mindepth 1 -type d ! -name '.*')
+        done < <(find "$1" -maxdepth 1 -mindepth 1 -type d ! -name '.*')
     }
     if [[ $# -eq 0 ]]; then
         process_dir "$temp_dir"
     else
         for dir_name in "$@"; do
-            local repo_dir="$temp_dir/$dir_name"
-            [[ -d "$repo_dir" ]] && process_dir "$repo_dir" || \
-            print_info $(color cr 目录) $dir_name [ $(color cr ✖) ]
+            [[ -d "$temp_dir/$dir_name" ]] && process_dir "$temp_dir/$dir_name" || \
+            print_info $(color cr 目录) "$dir_name" [ $(color cr ✖) ]
         done
     fi
     rm -rf "$temp_dir"
@@ -198,8 +184,8 @@ main() {
     # 拉取编译源码
     status_info "拉取编译源码" clone_source_code
 
-    # 设置全局变量
-    status_info "设置全局变量" set_variable_values
+    # 设置环境变量
+    status_info "设置环境变量" set_variable_values
 
     # 下载部署toolchain缓存
     status_info "下载部署toolchain缓存" download_toolchain
@@ -239,36 +225,36 @@ clone_source_code() {
 
     # 拉取编译源码
     cd /workdir
-    git clone -q -b $REPO_BRANCH --single-branch $REPO_URL openwrt
+    git clone -q -b "$REPO_BRANCH" --single-branch "$REPO_URL" openwrt
     ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
     [ -d openwrt ] && cd openwrt || exit
     echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 }
 
-# 设置全局变量
+# 设置环境变量
 set_variable_values() {
     local TARGET_NAME SUBTARGET_NAME KERNEL KERNEL_FILE TOOLS_HASH
 
     # 源仓库与分支
-    SOURCE_REPO=$(basename $REPO_URL)
+    SOURCE_REPO=$(basename "$REPO_URL")
     echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
     echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
 
     # 平台架构
-    TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" $GITHUB_WORKSPACE/$CONFIG_FILE)
-    SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" $GITHUB_WORKSPACE/$CONFIG_FILE)
-    DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
+    TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" "$GITHUB_WORKSPACE/$CONFIG_FILE")
+    SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" "$GITHUB_WORKSPACE/$CONFIG_FILE")
+    DEVICE_TARGET="$TARGET_NAME-$SUBTARGET_NAME"
     echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
 
     # 内核版本
-    KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[\d\.]+' target/linux/$TARGET_NAME/Makefile)
+    KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[\d\.]+' "target/linux/$TARGET_NAME/Makefile")
     KERNEL_FILE="include/kernel-$KERNEL"
     [ -e "$KERNEL_FILE" ] || KERNEL_FILE="target/linux/generic/kernel-$KERNEL"
-    KERNEL_VERSION=$(grep -oP 'LINUX_KERNEL_HASH-\K[\d\.]+' $KERNEL_FILE)
+    KERNEL_VERSION=$(grep -oP 'LINUX_KERNEL_HASH-\K[\d\.]+' "$KERNEL_FILE")
     echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
 
     # toolchain缓存文件名
-    TOOLS_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
+    TOOLS_HASH=$(git log -1 --pretty=format:"%h" tools toolchain)
     CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
     echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
 
@@ -282,14 +268,14 @@ set_variable_values() {
 # 下载部署toolchain缓存
 download_toolchain() {
     local cache_xa cache_xc
-    if [[ $TOOLCHAIN = 'true' ]]; then
-        cache_xa=$(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
-        cache_xc=$(curl -sL https://api.github.com/repos/haiibo/toolchain-cache/releases | awk -F '"' '/download_url/{print $4}' | grep $CACHE_NAME)
-        if [[ $cache_xa || $cache_xc ]]; then
+    if [[ "$TOOLCHAIN" = 'true' ]]; then
+        cache_xa=$(curl -sL "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" | awk -F '"' '/download_url/{print $4}' | grep "$CACHE_NAME")
+        cache_xc=$(curl -sL "https://api.github.com/repos/haiibo/toolchain-cache/releases" | awk -F '"' '/download_url/{print $4}' | grep "$CACHE_NAME")
+        if [[ "$cache_xa" || "$cache_xc" ]]; then
             wget -qc -t=3 "${cache_xa:-$cache_xc}"
             if [ -e *.tzst ]; then
                 tar -I unzstd -xf *.tzst || tar -xf *.tzst
-                [ $cache_xa ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
+                [ "$cache_xa" ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
                 [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
             fi
         else
@@ -315,7 +301,7 @@ add_custom_packages() {
 
     # 创建插件保存目录
     destination_dir="package/A"
-    [ -d $destination_dir ] || mkdir -p $destination_dir
+    [ -d "$destination_dir" ] || mkdir -p "$destination_dir"
 
     # 基础插件
     clone_dir openwrt-23.05 https://github.com/coolsnowwolf/luci luci-app-adguardhome
@@ -374,16 +360,16 @@ add_custom_packages() {
 apply_custom_settings() {
     local drv_path pbuf_path
 
-    [ -e $GITHUB_WORKSPACE/files ] && mv $GITHUB_WORKSPACE/files files
+    [ -e "$GITHUB_WORKSPACE/files" ] && mv "$GITHUB_WORKSPACE/files" files
 
     # 设置固件rootfs大小
-    if [ $PART_SIZE ]; then
-        sed -i '/ROOTFS_PARTSIZE/d' $GITHUB_WORKSPACE/$CONFIG_FILE
-        echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>$GITHUB_WORKSPACE/$CONFIG_FILE
+    if [ "$PART_SIZE" ]; then
+        sed -i '/ROOTFS_PARTSIZE/d' "$GITHUB_WORKSPACE/$CONFIG_FILE"
+        echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>"$GITHUB_WORKSPACE/$CONFIG_FILE"
     fi
 
     # 修改默认ip地址
-    [ $IP_ADDRESS ] && sed -i '/lan) ipad/s/".*"/"'"$IP_ADDRESS"'"/' package/base-files/files/bin/config_generate
+    [ "$IP_ADDRESS" ] && sed -i '/lan) ipad/s/".*"/"'"$IP_ADDRESS"'"/' package/base-files/files/bin/config_generate
 
     # 更改默认shell为zsh
     # sed -i 's/\/bin\/ash/\/usr\/bin\/zsh/g' package/base-files/files/etc/passwd
@@ -407,13 +393,13 @@ apply_custom_settings() {
     # 修改qca-nss-drv启动顺序
     drv_path="feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
     if [ -f "$drv_path" ]; then
-        sed -i 's/START=.*/START=85/g' $drv_path
+        sed -i 's/START=.*/START=85/g' "$drv_path"
     fi
 
     # 修改qca-nss-pbuf启动顺序
     pbuf_path="package/kernel/mac80211/files/qca-nss-pbuf.init"
     if [ -f "$pbuf_path" ]; then
-        sed -i 's/START=.*/START=86/g' $pbuf_path
+        sed -i 's/START=.*/START=86/g' "$pbuf_path"
     fi
 
     # 移除attendedsysupgrade
@@ -426,7 +412,7 @@ apply_custom_settings() {
 
 # 更新配置文件
 update_config_file() {
-    [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
+    [ -e "$GITHUB_WORKSPACE/$CONFIG_FILE" ] && cp -f "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
     make defconfig 1>/dev/null 2>&1
 }
 

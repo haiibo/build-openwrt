@@ -88,7 +88,6 @@ jobs:
       CONFIG_FILE: configs/armv8-${{inputs.source}}.config
       DIY_SCRIPT: ${{inputs.source}}.sh
       RELEASE_TAG: armv8-${{inputs.source}}
-      UPLOAD_BIN_DIR: false
       UPLOAD_ARTIFACT: ${{inputs.artifact}}
       UPLOAD_RELEASE: ${{inputs.release}}
       TZ: Asia/Shanghai
@@ -162,7 +161,7 @@ jobs:
         uses: mknejp/delete-release-assets@v1
         with:
           token: ${{secrets.GITHUB_TOKEN}}
-          tag: toolchain
+          tag: toolchain-cache
           assets: '${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}*'
           fail-if-no-assets: false
           fail-if-no-release: false
@@ -172,12 +171,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: toolchain-cache
-          tag_name: toolchain
+          tag_name: toolchain-cache
           token: ${{secrets.GITHUB_TOKEN}}
           files: output/*
           body: OpenWrt 工具链缓存
 
-      - name: Download DL Package
+      - name: Download DL Packages
         run: |
           cd $OPENWRT_PATH
           # make download -j$(nproc)
@@ -193,13 +192,6 @@ jobs:
           make -j$(nproc) || make -j1 V=s
           echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
           echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >>$GITHUB_ENV
-
-      - name: Upload Bin Directory
-        if: steps.compile.conclusion == 'success' && env.UPLOAD_BIN_DIR == 'true'
-        uses: actions/upload-artifact@main
-        with:
-          name: ${{env.SOURCE_REPO}}-${{env.LITE_BRANCH}}-${{env.DEVICE_TARGET}}-bin-${{env.FILE_DATE}}
-          path: ${{env.OPENWRT_PATH}}/bin
 
       - name: Packaging OpenWrt
         if: steps.compile.conclusion == 'success'
