@@ -325,6 +325,7 @@ add_custom_packages() {
     clone_all https://github.com/nikkinikki-org/OpenWrt-momo
     clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
     git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
+    clone_dir https://github.com/sbwml/openwrt_helloworld xray-core
 
     # Themes
     git_clone https://github.com/kiddin9/luci-theme-edge
