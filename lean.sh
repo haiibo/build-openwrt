@@ -51,10 +51,10 @@ status_info() {
         time_info=""
     fi
     if [[ "$exit_code" -eq 0 ]]; then
-        printf "%s %-53s %s %s %s %s %s %s %s\n" \
+        printf "%s %-52s %s %s %s %s %s %s %s\n" \
         $(color cy "⏳ $task_name") [ $(color cg ✔) ] $(color cw "$time_info")
     else
-        printf "%s %-53s %s %s %s %s %s %s %s\n" \
+        printf "%s %-52s %s %s %s %s %s %s %s\n" \
         $(color cy "⏳ $task_name") [ $(color cr ✖) ] $(color cw "$time_info")
     fi
 }
@@ -224,9 +224,7 @@ clone_source_code() {
     echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
 
     # 拉取编译源码
-    cd /workdir
     git clone -q -b "$REPO_BRANCH" --single-branch "$REPO_URL" openwrt
-    ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
     [ -d openwrt ] && cd openwrt || exit
     echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
 

@@ -127,22 +127,6 @@ jobs:
           sudo -E systemctl daemon-reload
           sudo timedatectl set-timezone "$TZ"
 
-      - name: Combine Disks
-        run: |
-          mnt_size=$(($(df -k --output=avail /mnt | tail -1) / 1024 - 1024))
-          sudo fallocate -l ${mnt_size}M /mnt/mnt.img
-          loop_mnt=$(sudo losetup -f --show /mnt/mnt.img)
-          root_size=$(($(df -k --output=avail / | tail -1) / 1024 - 4096))
-          sudo fallocate -l ${root_size}M /root.img
-          loop_root=$(sudo losetup -f --show /root.img)
-          sudo pvcreate -f $loop_mnt $loop_root
-          sudo vgcreate github $loop_mnt $loop_root
-          sudo lvcreate -n runner -l 100%FREE github
-          sudo mkfs.btrfs -f /dev/github/runner
-          sudo mkdir -p /workdir
-          sudo mount -o compress=zstd /dev/github/runner /workdir
-          sudo chown -R runner:runner /workdir && df -hT
-
       - name: Load Custom Script
         run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
@@ -204,11 +188,11 @@ jobs:
       - name: Organize Files
         if: env.PACKAGED_STATUS == 'success'
         run: |
-          df -hT
+          df -h && cd $OPENWRT_PATH
+          du -h --max-depth=1
           echo "==============================="
-          ls $OPENWRT_PATH/bin/targets/*/*
+          cd $OPENWRT_PATH/bin/targets/*/* && ls
           echo "==============================="
-          cd $OPENWRT_PATH/bin/targets/*/*
           sed '/^$/d' $OPENWRT_PATH/.config >config.txt
           cat config.buildinfo
           cp -rf $OPENWRT_PATH/bin/packages/* packages
