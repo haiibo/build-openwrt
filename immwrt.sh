@@ -54,7 +54,7 @@ status_info() {
         printf "%s %-53s %s %s %s %s %s %s %s\n" \
         $(color cy "⏳ $task_name") [ $(color cg ✔) ] $(color cw "$time_info")
     else
-        printf "%s %-53s %s %s %s %s\n" \
+        printf "%s %-53s %s %s %s %s %s %s %s\n" \
         $(color cy "⏳ $task_name") [ $(color cr ✖) ] $(color cw "$time_info")
     fi
 }
