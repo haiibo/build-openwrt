@@ -219,14 +219,16 @@ main() {
 clone_source_code() {
     # 设置编译源码与分支
     REPO_URL="https://github.com/immortalwrt/immortalwrt"
-    echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
+    echo "REPO_URL=$REPO_URL" >> $GITHUB_ENV
     REPO_BRANCH="openwrt-24.10"
-    echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
+    echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_ENV
 
     # 拉取编译源码
+    cd /workdir
     git clone -q -b "$REPO_BRANCH" --single-branch "$REPO_URL" openwrt
+    ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
     [ -d openwrt ] && cd openwrt || exit
-    echo "OPENWRT_PATH=$PWD" >>$GITHUB_ENV
+    echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
 }
 
 # 设置环境变量
@@ -235,32 +237,32 @@ set_variable_values() {
 
     # 源仓库与分支
     SOURCE_REPO=$(basename "$REPO_URL")
-    echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
-    echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
+    echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
+    echo "LITE_BRANCH=${REPO_BRANCH#*-}" >> $GITHUB_ENV
 
     # 平台架构
     TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" "$GITHUB_WORKSPACE/$CONFIG_FILE")
     SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" "$GITHUB_WORKSPACE/$CONFIG_FILE")
     DEVICE_TARGET="$TARGET_NAME-$SUBTARGET_NAME"
-    echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
+    echo "DEVICE_TARGET=$DEVICE_TARGET" >> $GITHUB_ENV
 
     # 内核版本
     KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[\d\.]+' "target/linux/$TARGET_NAME/Makefile")
     KERNEL_FILE="include/kernel-$KERNEL"
     [ -e "$KERNEL_FILE" ] || KERNEL_FILE="target/linux/generic/kernel-$KERNEL"
     KERNEL_VERSION=$(grep -oP 'LINUX_KERNEL_HASH-\K[\d\.]+' "$KERNEL_FILE")
-    echo "KERNEL_VERSION=$KERNEL_VERSION" >>$GITHUB_ENV
+    echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
 
     # toolchain缓存文件名
     TOOLS_HASH=$(git log -1 --pretty=format:"%h" tools toolchain)
     CACHE_NAME="$SOURCE_REPO-${REPO_BRANCH#*-}-$DEVICE_TARGET-cache-$TOOLS_HASH"
-    echo "CACHE_NAME=$CACHE_NAME" >>$GITHUB_ENV
+    echo "CACHE_NAME=$CACHE_NAME" >> $GITHUB_ENV
 
     # 源码更新信息
-    echo "COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")" >>$GITHUB_ENV
-    echo "COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")" >>$GITHUB_ENV
-    echo "COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")" >>$GITHUB_ENV
-    echo "COMMIT_HASH=$(git show -s --date=short --format="hash: %H")" >>$GITHUB_ENV
+    echo "COMMIT_AUTHOR=$(git show -s --date=short --format="作者: %an")" >> $GITHUB_ENV
+    echo "COMMIT_DATE=$(git show -s --date=short --format="时间: %ci")" >> $GITHUB_ENV
+    echo "COMMIT_MESSAGE=$(git show -s --date=short --format="内容: %s")" >> $GITHUB_ENV
+    echo "COMMIT_HASH=$(git show -s --date=short --format="hash: %H")" >> $GITHUB_ENV
 }
 
 # 下载部署toolchain缓存
@@ -273,16 +275,16 @@ download_toolchain() {
             wget -qc -t=3 "${cache_xa:-$cache_xc}"
             if [ -e *.tzst ]; then
                 tar -I unzstd -xf *.tzst || tar -xf *.tzst
-                [ "$cache_xa" ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >>$GITHUB_ENV)
+                [ "$cache_xa" ] || (cp *.tzst $GITHUB_WORKSPACE/output && echo "OUTPUT_RELEASE=true" >> $GITHUB_ENV)
                 [ -d staging_dir ] && sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
             fi
         else
-            echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
+            echo "REBUILD_TOOLCHAIN=true" >> $GITHUB_ENV
             echo "⚠️ 未找到最新工具链"
             return 99
         fi
     else
-        echo "REBUILD_TOOLCHAIN=true" >>$GITHUB_ENV
+        echo "REBUILD_TOOLCHAIN=true" >> $GITHUB_ENV
         return 99
     fi
 }
@@ -323,7 +325,6 @@ add_custom_packages() {
     clone_all https://github.com/nikkinikki-org/OpenWrt-momo
     clone_dir https://github.com/QiuSimons/luci-app-daed daed luci-app-daed
     git_clone https://github.com/immortalwrt/homeproxy luci-app-homeproxy
-    clone_dir https://github.com/sbwml/openwrt_helloworld xray-core
 
     # Themes
     git_clone https://github.com/kiddin9/luci-theme-edge
@@ -364,7 +365,7 @@ apply_custom_settings() {
     # 设置固件rootfs大小
     if [ "$PART_SIZE" ]; then
         sed -i '/ROOTFS_PARTSIZE/d' "$GITHUB_WORKSPACE/$CONFIG_FILE"
-        echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >>"$GITHUB_WORKSPACE/$CONFIG_FILE"
+        echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PART_SIZE" >> "$GITHUB_WORKSPACE/$CONFIG_FILE"
     fi
 
     # 修改默认ip地址
@@ -388,9 +389,6 @@ apply_custom_settings() {
     # 设置nlbwmon独立菜单
     sed -i 's/services\/nlbw/nlbw/g; /path/s/admin\///g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json
     sed -i 's/services\///g' feeds/luci/applications/luci-app-nlbwmon/htdocs/luci-static/resources/view/nlbw/config.js
-
-    # 临时修复rust资源失效(编译时间变长)
-    sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' feeds/packages/lang/rust/Makefile
 
     # 修改qca-nss-drv启动顺序
     drv_path="feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"

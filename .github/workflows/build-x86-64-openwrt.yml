@@ -120,6 +120,22 @@ jobs:
           sudo -E systemctl daemon-reload
           sudo timedatectl set-timezone "$TZ"
 
+      - name: Combine Disks
+        run: |
+          mnt_size=$(($(df -k --output=avail /mnt | tail -1) / 1024 - 1024))
+          sudo fallocate -l ${mnt_size}M /mnt/mnt.img
+          loop_mnt=$(sudo losetup -f --show /mnt/mnt.img)
+          root_size=$(($(df -k --output=avail / | tail -1) / 1024 - 4096))
+          sudo fallocate -l ${root_size}M /root.img
+          loop_root=$(sudo losetup -f --show /root.img)
+          sudo pvcreate -f $loop_mnt $loop_root
+          sudo vgcreate github $loop_mnt $loop_root
+          sudo lvcreate -n runner -l 100%FREE github
+          sudo mkfs.btrfs -f /dev/github/runner
+          sudo mkdir -p /workdir
+          sudo mount -o compress=zstd /dev/github/runner /workdir
+          sudo chown -R runner:runner /workdir && df -hT
+
       - name: Load Custom Script
         run: chmod +x $DIY_SCRIPT && ./$DIY_SCRIPT
 
@@ -143,7 +159,7 @@ jobs:
 
       - name: Upload Toolchain To Release
         if: steps.toolchain.conclusion == 'success' || env.OUTPUT_RELEASE == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@master
         with:
           name: toolchain-cache
           tag_name: toolchain-cache
@@ -165,8 +181,8 @@ jobs:
           cp $GITHUB_WORKSPACE/scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
-          echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
-          echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >>$GITHUB_ENV
+          echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
+          echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >> $GITHUB_ENV
 
       - name: Organize Files
         if: steps.compile.conclusion == 'success'
@@ -176,12 +192,12 @@ jobs:
           echo "==============================="
           cd $OPENWRT_PATH/bin/targets/*/* && ls
           echo "==============================="
-          sed '/^$/d' $OPENWRT_PATH/.config >config.txt
+          sed '/^$/d' $OPENWRT_PATH/.config > config.txt
           cat config.buildinfo
           cp -rf $OPENWRT_PATH/bin/packages/* packages
           tar -zcf packages.tar.gz packages
           sleep 3s && rm -rf packages sha256sums *.buildinfo *.bin *.json *rootfs.img.gz
-          echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
+          echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
 
       - name: Upload Firmware To Artifact
         if: steps.compile.conclusion == 'success' && env.UPLOAD_ARTIFACT == 'true'

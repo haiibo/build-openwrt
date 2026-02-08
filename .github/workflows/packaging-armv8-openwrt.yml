@@ -93,27 +93,27 @@ jobs:
       - name: Generate Variables
         run: |
           REPO_URL=$(grep -oP 'REPO_URL="\K[^"]+' $DIY_SCRIPT)
-          echo "REPO_URL=$REPO_URL" >>$GITHUB_ENV
-          echo "SOURCE_REPO=$(basename $REPO_URL)" >>$GITHUB_ENV
+          echo "REPO_URL=$REPO_URL" >> $GITHUB_ENV
+          echo "SOURCE_REPO=$(basename $REPO_URL)" >> $GITHUB_ENV
           REPO_BRANCH=$(grep -oP 'REPO_BRANCH="\K[^"]+' $DIY_SCRIPT)
-          echo "REPO_BRANCH=$REPO_BRANCH" >>$GITHUB_ENV
-          echo "LITE_BRANCH=${REPO_BRANCH#*-}" >>$GITHUB_ENV
+          echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_ENV
+          echo "LITE_BRANCH=${REPO_BRANCH#*-}" >> $GITHUB_ENV
           TARGET_NAME=$(grep -oP "^CONFIG_TARGET_\K[a-z0-9]+(?==y)" $CONFIG_FILE)
           SUBTARGET_NAME=$(grep -oP "^CONFIG_TARGET_${TARGET_NAME}_\K[a-z0-9]+(?==y)" $CONFIG_FILE)
-          echo "DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME" >>$GITHUB_ENV
+          echo "DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME" >> $GITHUB_ENV
 
       - name: Download OpenWrt Firmware
         id: download
         run: |
           FIRMWARE_PATH=openwrt/bin/targets/armvirt/64
           [ -d "$FIRMWARE_PATH" ] || mkdir -p "$FIRMWARE_PATH"
-          echo -e $(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | grep "$DEVICE_TARGET.*$REPO_URL.*$REPO_BRANCH" | cut -d '"' -f4) >release.txt
+          echo -e $(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | grep "$DEVICE_TARGET.*$REPO_URL.*$REPO_BRANCH" | cut -d '"' -f4) > release.txt
           [ -n "$IP_ADDRESS" ] && sed -Ei "s/\b([0-9]{1,3}\.){3}[0-9]{1,3}\b/${IP_ADDRESS}/g" release.txt
           cd $FIRMWARE_PATH
           wget -q $(curl -sL https://api.github.com/repos/$GITHUB_REPOSITORY/releases | grep "$RELEASE_TAG/" | grep -v img.gz | cut -d '"' -f4)
-          echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
-          echo "FILE_DATE=$(date +"%Y.%m.%d")" >>$GITHUB_ENV
-          echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >>$GITHUB_ENV
+          echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
+          echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
+          echo "DATE=$(date +"%Y.%m.%d-%H:%M:%S")" >> $GITHUB_ENV
 
       - name: Use Flippy Script Packaging
         if: steps.download.conclusion == 'success' && github.event.inputs.script_repo == 'flippy'
