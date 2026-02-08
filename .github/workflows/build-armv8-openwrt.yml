@@ -130,10 +130,10 @@ jobs:
       - name: Combine Disks
         run: |
           mnt_size=$(($(df -k --output=avail /mnt | tail -1) / 1024 - 1024))
-          sudo fallocate -l ${mnt_size}M /mnt/mnt.img
+          sudo truncate -s ${mnt_size}M /mnt/mnt.img
           loop_mnt=$(sudo losetup -f --show /mnt/mnt.img)
           root_size=$(($(df -k --output=avail / | tail -1) / 1024 - 4096))
-          sudo fallocate -l ${root_size}M /root.img
+          sudo truncate -s ${root_size}M /root.img
           loop_root=$(sudo losetup -f --show /root.img)
           sudo pvcreate -f $loop_mnt $loop_root
           sudo vgcreate github $loop_mnt $loop_root
