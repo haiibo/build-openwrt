@@ -123,9 +123,11 @@ jobs:
 
       - name: Combine Disks
         run: |
-          mnt_size=$(($(df -k --output=avail /mnt | tail -1) / 1024 - 1024))
-          sudo truncate -s ${mnt_size}M /mnt/mnt.img
-          loop_mnt=$(sudo losetup -f --show /mnt/mnt.img)
+          if mountpoint -q /mnt; then
+            mnt_size=$(($(df -k --output=avail /mnt | tail -1) / 1024 - 1024))
+            sudo truncate -s ${mnt_size}M /mnt/mnt.img
+            loop_mnt=$(sudo losetup -f --show /mnt/mnt.img)
+          fi
           root_size=$(($(df -k --output=avail / | tail -1) / 1024 - 4096))
           sudo truncate -s ${root_size}M /root.img
           loop_root=$(sudo losetup -f --show /root.img)
