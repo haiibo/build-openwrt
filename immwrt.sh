@@ -305,7 +305,6 @@ add_custom_packages() {
 
     # 基础插件
     clone_dir openwrt-23.05 https://github.com/coolsnowwolf/luci luci-app-adguardhome
-    clone_all https://github.com/lwb1978/openwrt-gecoosac
     clone_dir https://github.com/sirpdboy/luci-app-ddns-go ddns-go luci-app-ddns-go
     clone_all https://github.com/sbwml/luci-app-alist
     clone_all https://github.com/sbwml/luci-app-mosdns
@@ -316,7 +315,7 @@ add_custom_packages() {
     clone_all https://github.com/brvphoenix/wrtbwmon
 
     # 科学上网插件
-    clone_all https://github.com/fw876/helloworld
+    # clone_all https://github.com/fw876/helloworld
     clone_all https://github.com/Openwrt-Passwall/openwrt-passwall-packages
     clone_all https://github.com/Openwrt-Passwall/openwrt-passwall
     clone_all https://github.com/Openwrt-Passwall/openwrt-passwall2
