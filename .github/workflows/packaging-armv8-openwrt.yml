@@ -23,7 +23,7 @@ on:
       openwrt_kernel:
         description: '设置内核版本'
         required: true
-        default: '6.6.y_6.12.y'
+        default: '6.12.y_6.18.y'
 
       script_repo:
         description: '选择打包脚本储存库'
