@@ -231,7 +231,8 @@ clone_source_code() {
     echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
 
     # 设置luci版本为18.06
-    sed -i '/luci/s/^#//; /luci.git;openwrt/s/^/#/' feeds.conf.default
+    sed -i '/luci/d' feeds.conf.default
+    sed -i '1a src-git luci https://github.com/coolsnowwolf/luci.git;master' feeds.conf.default
 }
 
 # 设置环境变量
@@ -332,7 +333,7 @@ add_custom_packages() {
     clone_dir https://github.com/haiibo/packages luci-theme-opentomcat
 
     # 晶晨宝盒
-    clone_all https://github.com/ophub/luci-app-amlogic
+    clone_all lua https://github.com/ophub/luci-app-amlogic
     sed -i "s|firmware_repo.*|firmware_repo 'https://github.com/$GITHUB_REPOSITORY'|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
     # sed -i "s|kernel_path.*|kernel_path 'https://github.com/ophub/kernel'|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
     sed -i "s|ARMv8|$RELEASE_TAG|g" $destination_dir/luci-app-amlogic/root/etc/config/amlogic
