@@ -197,7 +197,7 @@ jobs:
         if: steps.compile.conclusion == 'success'
         uses: haiibo/flippy-openwrt-actions@main
         env:
-          OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
+          OPENWRT_ARMSR: openwrt/bin/targets/*/*/*generic-rootfs.tar.gz
           PACKAGE_SOC: ${{inputs.openwrt_board}}
           KERNEL_REPO_URL: ${{inputs.kernel_repo}}
           KERNEL_VERSION_NAME: ${{inputs.openwrt_kernel}}
@@ -215,7 +215,7 @@ jobs:
           cat config.buildinfo
           cp -rf $OPENWRT_PATH/bin/packages/* packages
           tar -zcf packages.tar.gz packages
-          sleep 3s && rm -rf packages u-boot-qemu* sha256sums *.buildinfo *.bin
+          sleep 3s && rm -rf packages u-boot-qemu* sha256sums *.buildinfo *.bin *.json *targz-rootfs.tar.gz
           echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
           cd $PACKAGED_OUTPUTPATH && rm -f *rootfs.tar.gz *.sha
           if [[ $SOURCE_REPO == 'immortalwrt' ]]; then

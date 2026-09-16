@@ -308,7 +308,6 @@ add_custom_packages() {
     # 基础插件
     git_clone https://github.com/kongfl888/luci-app-adguardhome
     clone_all lua https://github.com/sirpdboy/luci-app-ddns-go
-    clone_dir lua https://github.com/sbwml/luci-app-alist luci-app-alist
     clone_all v5-lua https://github.com/sbwml/luci-app-mosdns
     git_clone https://github.com/sbwml/packages_lang_golang golang
     git_clone lede https://github.com/pymumu/luci-app-smartdns
@@ -387,6 +386,16 @@ apply_custom_settings() {
     # 修改版本为编译日期
     orig_version=$(awk -F "'" '/DISTRIB_REVISION=/{print $2}' package/lean/default-settings/files/zzz-default-settings)
     sed -i "s/$orig_version/R$(date +%y.%-m.%-d)/g" package/lean/default-settings/files/zzz-default-settings
+
+    # 修改NAS菜单名称
+    for lang in zh-cn zh_Hans; do
+        file="feeds/luci/applications/luci-app-samba4/po/$lang/samba4.po"
+        if [ -f "$file" ]; then
+            echo "" >> "$file"
+            echo 'msgid "NAS"' >> "$file"
+            echo 'msgstr "网络存储"' >> "$file"
+        fi
+    done
 
     # 删除主题默认设置
     # find $destination_dir/luci-theme-*/ -type f -name '*luci-theme-*' -exec sed -i '/set luci.main.mediaurlbase/d' {} +

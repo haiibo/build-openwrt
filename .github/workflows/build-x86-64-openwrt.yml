@@ -198,7 +198,7 @@ jobs:
           cat config.buildinfo
           cp -rf $OPENWRT_PATH/bin/packages/* packages
           tar -zcf packages.tar.gz packages
-          sleep 3s && rm -rf packages sha256sums *.buildinfo *.bin *.json *rootfs.img.gz
+          sleep 3s && rm -rf packages sha256sums *.buildinfo *.bin *.json *rootfs.img.gz *targz-rootfs.tar.gz
           echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
 
       - name: Upload Firmware To Artifact

@@ -119,7 +119,7 @@ jobs:
         if: steps.download.conclusion == 'success' && github.event.inputs.script_repo == 'flippy'
         uses: haiibo/flippy-openwrt-actions@main
         env:
-          OPENWRT_ARMSR: openwrt/bin/targets/*/*/*rootfs.tar.gz
+          OPENWRT_ARMSR: openwrt/bin/targets/*/*/*generic-rootfs.tar.gz
           PACKAGE_SOC: ${{inputs.openwrt_board}}
           KERNEL_REPO_URL: ${{inputs.kernel_repo}}
           KERNEL_VERSION_NAME: ${{inputs.openwrt_kernel}}
@@ -132,7 +132,7 @@ jobs:
         if: steps.download.conclusion == 'success' && github.event.inputs.script_repo == 'ophub'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
+          openwrt_path: openwrt/bin/targets/*/*/*generic-rootfs.tar.gz
           openwrt_ip: ${{inputs.ip_address}}
           openwrt_board: ${{inputs.openwrt_board}}
           openwrt_kernel: ${{inputs.openwrt_kernel}}

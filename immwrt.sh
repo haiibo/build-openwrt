@@ -220,7 +220,7 @@ clone_source_code() {
     # 设置编译源码与分支
     REPO_URL="https://github.com/immortalwrt/immortalwrt"
     echo "REPO_URL=$REPO_URL" >> $GITHUB_ENV
-    REPO_BRANCH="openwrt-24.10"
+    REPO_BRANCH="openwrt-25.12"
     echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_ENV
 
     # 拉取编译源码
@@ -306,7 +306,7 @@ add_custom_packages() {
     # 基础插件
     clone_dir https://github.com/sirpdboy/luci-app-adguardhome luci-app-adguardhome
     clone_dir https://github.com/sirpdboy/luci-app-ddns-go ddns-go luci-app-ddns-go
-    clone_all https://github.com/sbwml/luci-app-alist
+    clone_all https://github.com/sbwml/luci-app-openlist2
     clone_all https://github.com/sbwml/luci-app-mosdns
     git_clone https://github.com/sbwml/packages_lang_golang golang
     clone_all https://github.com/linkease/istore-ui
@@ -388,6 +388,16 @@ apply_custom_settings() {
     # 设置nlbwmon独立菜单
     sed -i 's/services\/nlbw/nlbw/g; /path/s/admin\///g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json
     sed -i 's/services\///g' feeds/luci/applications/luci-app-nlbwmon/htdocs/luci-static/resources/view/nlbw/config.js
+
+    # 修改NAS菜单名称
+    for lang in zh-cn zh_Hans; do
+        file="feeds/luci/applications/luci-app-samba4/po/$lang/samba4.po"
+        if [ -f "$file" ]; then
+            echo "" >> "$file"
+            echo 'msgid "NAS"' >> "$file"
+            echo 'msgstr "网络存储"' >> "$file"
+        fi
+    done
 
     # 修改qca-nss-drv启动顺序
     drv_path="feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
